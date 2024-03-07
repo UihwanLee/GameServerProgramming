@@ -4,6 +4,7 @@
 // 콜벡 함수
 GLvoid Render(GLvoid);
 GLvoid Reshape(int w, int h);
+GLvoid SpecialKeyBoard(int key, int x, int y);
 
 // VAO, VBO
 GLuint VAO, VBO[2], EBO;
@@ -17,6 +18,10 @@ GLvoid CreateShaderProgram();
 
 GLvoid InitBuffer();
 GLvoid InitObjects();
+
+// INDEX
+int idx = -1;
+int playerIDX = -1;
 
 // 카메라
 mat4 camera = mat4(1.0f);
@@ -47,6 +52,9 @@ void main(int argc, char** argv)
 
 	glutDisplayFunc(Render);
 
+	// 키보드
+	glutSpecialFunc(SpecialKeyBoard);
+
 	glutMainLoop();
 }
 
@@ -70,9 +78,11 @@ GLvoid InitObjects()
 {
 	m_ObjectManager->Reset();
 
-	int idx = -1;
-
+	// 체스판 생성
 	m_ObjectManager->CreatBoard(&idx);
+
+	// 플레이어 생성
+	playerIDX = m_ObjectManager->CreatPlayer(&idx);
 
 	// 카메라 세팅
 	camera = glm::translate(camera, glm::vec3(0.0f, 0.0f, -2.0f));
@@ -213,4 +223,24 @@ void DrawObjects(int idx)
 	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), 0);
 
 	glDrawElements(GL_TRIANGLES, m_ObjectManager->m_ObjectList[idx]->m_index.size(), GL_UNSIGNED_INT, 0);
+}
+
+void SpecialKeyBoard(int key, int x, int y)
+{
+	// 스페설 키보드 입력 처리
+	switch (key) {
+	case GLUT_KEY_LEFT:
+		m_ObjectManager->GoLeft(playerIDX);
+		break;
+	case GLUT_KEY_RIGHT:
+		m_ObjectManager->GoRight(playerIDX);
+		break;
+	case GLUT_KEY_UP:
+		m_ObjectManager->GoUp(playerIDX);
+		break;
+	case GLUT_KEY_DOWN:
+		m_ObjectManager->GoDown(playerIDX);
+		break;
+	}
+	glutPostRedisplay();
 }

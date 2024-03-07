@@ -2,6 +2,7 @@
 
 ObjectManager::ObjectManager()
 {
+	currentIDX = 35;
 }
 
 ObjectManager::~ObjectManager()
@@ -50,6 +51,14 @@ void ObjectManager::CreatBoard(int *idx)
 	}
 }
 
+int ObjectManager::CreatPlayer(int* idx)
+{
+	CreateRect(idx, highp_vec3(1.0f, 0.0f, 0.0f));
+	SetPosition(*idx, Figure::Boards[currentIDX]);
+
+	return *idx;
+}
+
 void ObjectManager::SetPosition(int idx, float x, float y, float z)
 {
 	if (m_ObjectList.empty()) return;
@@ -75,7 +84,39 @@ void ObjectManager::Move(int idx, vec3 position)
 {
 	if (m_ObjectList.empty()) return;
 
+	m_ObjectList[idx]->Move(position);
+}
 
+void ObjectManager::GoUp(int idx)
+{
+	if (currentIDX - 8 < 0) return;
+
+	currentIDX = currentIDX - 8;
+	m_ObjectList[idx]->SetPosition(Figure::Boards[currentIDX]);
+}
+
+void ObjectManager::GoDown(int idx)
+{
+	if (currentIDX + 8 >= Figure::Boards.size()) return;
+
+	currentIDX = currentIDX + 8;
+	m_ObjectList[idx]->SetPosition(Figure::Boards[currentIDX]);
+}
+
+void ObjectManager::GoLeft(int idx)
+{
+	if (currentIDX % 8 - 1 < 0) return;
+
+	currentIDX = currentIDX - 1;
+	m_ObjectList[idx]->SetPosition(Figure::Boards[currentIDX]);
+}
+
+void ObjectManager::GoRight(int idx)
+{
+	if (currentIDX % 8 + 1 >= 8) return;
+
+	currentIDX = currentIDX + 1;
+	m_ObjectList[idx]->SetPosition(Figure::Boards[currentIDX]);
 }
 
 void ObjectManager::Reset()
