@@ -5,6 +5,9 @@
 class Figure
 {
 public:
+	static GLfloat board[8];
+
+public:
 	// Ã¼½ºÆÇ
 	static GLfloat	RectVertexs[12];
 	static GLfloat	RectColors[12];

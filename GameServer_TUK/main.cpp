@@ -6,6 +6,9 @@ GLvoid Render(GLvoid);
 GLvoid Reshape(int w, int h);
 GLvoid SpecialKeyBoard(int key, int x, int y);
 
+// Texture
+GLuint texture;
+
 // VAO, VBO
 GLuint VAO, VBO[2], EBO;
 
@@ -85,7 +88,7 @@ GLvoid InitObjects()
 	playerIDX = m_ObjectManager->CreatPlayer(&idx);
 
 	// 카메라 세팅
-	camera = glm::translate(camera, glm::vec3(0.0f, 0.0f, -2.0f));
+	camera = glm::translate(camera, glm::vec3(0.0f, 0.0f, -10.0f));
 }
 
 char* GetBuf(const char* file)
@@ -201,28 +204,32 @@ void DrawProjection()
 
 void DrawObjects(int idx)	
 {
+	// Model
 	unsigned int modelLocation = glGetUniformLocation(shaderProgramID, "modelTransform");
-
 	m_ObjectManager->m_ObjectList[idx]->m_model = m_ObjectManager->TransformModel(idx);
+	glUniformMatrix4fv(modelLocation, 1, GL_FALSE, glm::value_ptr(m_ObjectManager->m_ObjectList[idx]->m_model));
 
-	glUniformMatrix4fv(modelLocation, 1, GL_FALSE, glm::value_ptr(m_ObjectManager->m_ObjectList[idx]->m_model));		// 모델변환
-
+	// Position / Color
 	glBindBuffer(GL_ARRAY_BUFFER, VBO[0]);
-	glBufferData(GL_ARRAY_BUFFER, m_ObjectManager->m_ObjectList[idx]->m_pos.size() * 4, &m_ObjectManager->m_ObjectList[idx]->m_pos[0], GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, m_ObjectManager->m_ObjectList[idx]->m_pos.size() * sizeof(GLfloat), &m_ObjectManager->m_ObjectList[idx]->m_pos[0], GL_STATIC_DRAW);
 
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_ObjectManager->m_ObjectList[idx]->m_index.size() * 4, &m_ObjectManager->m_ObjectList[idx]->m_index[0], GL_STATIC_DRAW);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_ObjectManager->m_ObjectList[idx]->m_index.size() * sizeof(GLfloat), &m_ObjectManager->m_ObjectList[idx]->m_index[0], GL_STATIC_DRAW);
 
 	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), 0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), 0);
 
 	glBindBuffer(GL_ARRAY_BUFFER, VBO[1]);
-	glBufferData(GL_ARRAY_BUFFER, m_ObjectManager->m_ObjectList[idx]->m_col.size() * 4, &m_ObjectManager->m_ObjectList[idx]->m_col[0], GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, m_ObjectManager->m_ObjectList[idx]->m_col.size() * sizeof(GLfloat), &m_ObjectManager->m_ObjectList[idx]->m_col[0], GL_STATIC_DRAW);
 
 	glEnableVertexAttribArray(1);
-	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), 0);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), 0);
+
 
 	glDrawElements(GL_TRIANGLES, m_ObjectManager->m_ObjectList[idx]->m_index.size(), GL_UNSIGNED_INT, 0);
+
+	glDisableVertexAttribArray(0);
+	glDisableVertexAttribArray(1);
 }
 
 void SpecialKeyBoard(int key, int x, int y)
