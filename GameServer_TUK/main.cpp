@@ -18,7 +18,12 @@ GLvoid CreateShaderProgram();
 GLvoid InitBuffer();
 GLvoid InitObjects();
 
+// 카메라
+mat4 camera = mat4(1.0f);
+
 // 삼각형 그리기 함수
+void DrawView();
+void DrawProjection();
 void DrawObjects(int idx);
 
 // 오브젝트 리스트
@@ -31,7 +36,7 @@ void main(int argc, char** argv)
 	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA);
 	glutInitWindowPosition(0, 0);
 	glutInitWindowSize(WIDTH, HEIGHT);
-	glutCreateWindow("Draw Triangle");
+	glutCreateWindow("GameServerTUK");
 
 	//--- GLEW 초기화하기
 	glewExperimental = GL_TRUE;
@@ -65,9 +70,12 @@ GLvoid InitObjects()
 {
 	m_ObjectManager->Reset();
 
-	int idx = 0;
+	int idx = -1;
 
-	m_ObjectManager->CreateRect(&idx);
+	m_ObjectManager->CreatBoard(&idx);
+
+	// 카메라 세팅
+	camera = glm::translate(camera, glm::vec3(0.0f, 0.0f, -2.0f));
 }
 
 char* GetBuf(const char* file)
@@ -145,6 +153,8 @@ GLvoid Render()
 	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
 
+	DrawView();
+	DrawProjection();
 	for (int i = 0; i < m_ObjectManager->m_ObjectList.size(); i++)
 	{
 		if (m_ObjectManager->m_ObjectList[i]->IsActive())
@@ -156,8 +166,37 @@ GLvoid Render()
 	glutSwapBuffers();
 }
 
+void DrawView()
+{
+	unsigned int viewLocation = glGetUniformLocation(shaderProgramID, "viewTransform");
+
+	glUniformMatrix4fv(viewLocation, 1, GL_FALSE,glm::value_ptr(camera));
+}
+
+void DrawProjection()
+{
+	unsigned int projectionLocation = glGetUniformLocation(shaderProgramID, "projectionTransform");
+
+	glm::mat4 projection = glm::mat4(1.0f);
+
+	// 원근 투영
+	float fov = 45.0f; // 시야각 (Field of View)
+	float aspectRatio = static_cast<float>(WIDTH) / static_cast<float>(HEIGHT); // 화면의 가로 세로 비율
+	float zNear = 0.1f; // 가까운 클리핑 평면
+	float zFar = 50.0f; // 먼 클리핑 평면
+	projection = glm::perspective(glm::radians(fov), aspectRatio, zNear, zFar); //--- 투영 공간 설정: (뷰잉각도, 종횡비, 가까운거리, 먼거리)
+
+	glUniformMatrix4fv(projectionLocation, 1, GL_FALSE, &projection[0][0]);		// 투영변환
+}
+
 void DrawObjects(int idx)	
 {
+	unsigned int modelLocation = glGetUniformLocation(shaderProgramID, "modelTransform");
+
+	m_ObjectManager->m_ObjectList[idx]->m_model = m_ObjectManager->TransformModel(idx);
+
+	glUniformMatrix4fv(modelLocation, 1, GL_FALSE, glm::value_ptr(m_ObjectManager->m_ObjectList[idx]->m_model));		// 모델변환
+
 	glBindBuffer(GL_ARRAY_BUFFER, VBO[0]);
 	glBufferData(GL_ARRAY_BUFFER, m_ObjectManager->m_ObjectList[idx]->m_pos.size() * 4, &m_ObjectManager->m_ObjectList[idx]->m_pos[0], GL_STATIC_DRAW);
 

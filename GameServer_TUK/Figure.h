@@ -9,4 +9,10 @@ public:
 	static GLfloat	RectVertexs[12];
 	static GLfloat	RectColors[12];
 	static GLint	RectIndecies[6];
+
+	// Ã¼½ºÆÇ Position
+	static vector<vec3> Boards;
+
+	static highp_vec3 boardColorType1;
+	static highp_vec3 boardColorType2;
 };

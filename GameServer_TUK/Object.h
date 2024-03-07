@@ -4,7 +4,9 @@
 
 class Object
 {
-private:
+public :
+	mat4		m_model;
+
 	vec3		m_position;
 	vec3		m_rotate;
 	vec3		m_scale;
@@ -26,9 +28,13 @@ public:
 	void SetScale(float x, float y, float z);
 	void SetActive(bool bActive);	
 
+	void SetPosition(vec3 position);
+
 	void Move(float x, float y, float z);
 	void Rotate(float x, float y, float z);
 	void Scale(float x, float y, float z);
+
+	void Move(vec3 position);
 
 	bool IsActive();
 };
