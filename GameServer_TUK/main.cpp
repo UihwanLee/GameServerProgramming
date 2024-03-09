@@ -2,25 +2,27 @@
 #include "ObjectManager.h"
 
 // 콜벡 함수
-GLvoid Render(GLvoid);
-GLvoid Reshape(int w, int h);
-GLvoid SpecialKeyBoard(int key, int x, int y);
+GLvoid render(GLvoid);
+GLvoid reshape(int w, int h);
+GLvoid specialKeyBoard(int key, int x, int y);
 
 // Texture
-GLuint texture;
+unsigned int texture;
 
 // VAO, VBO
 GLuint VAO, VBO[2], EBO;
+
+BITMAPINFO* bmp;
 
 GLchar* vertexSource, * fragmentSource; //--- 소스코드 저장 변수
 GLuint vertexShader, fragmentShader; //세이더 객체
 GLuint shaderProgramID; // 세이더 프로그램
 
-GLint CreateShader(const char* file, int type);
-GLvoid CreateShaderProgram();
+GLint createShader(const char* file, int type);
+GLvoid createShaderProgram();
 
-GLvoid InitBuffer();
-GLvoid InitObjects();
+GLvoid initBuffer();
+GLvoid initObjects();
 
 // INDEX
 int idx = -1;
@@ -30,9 +32,9 @@ int playerIDX = -1;
 mat4 camera = mat4(1.0f);
 
 // 삼각형 그리기 함수
-void DrawView();
-void DrawProjection();
-void DrawObjects(int idx);
+void drawView();
+void drawProjection();
+void drawObjects(int idx);
 
 // 오브젝트 리스트
 ObjectManager* m_ObjectManager = new ObjectManager();
@@ -50,48 +52,49 @@ void main(int argc, char** argv)
 	glewExperimental = GL_TRUE;
 	glewInit();
 
-	InitBuffer();
-	CreateShaderProgram();
+	initBuffer();
+	createShaderProgram();
 
-	glutDisplayFunc(Render);
+	glutDisplayFunc(render);
 
 	// 키보드
-	glutSpecialFunc(SpecialKeyBoard);
+	glutSpecialFunc(specialKeyBoard);
 
 	glutMainLoop();
 }
 
-GLvoid Reshape(int w, int h)
+GLvoid reshape(int w, int h)
 {
 	// 뷰포트 기본 WIDTH HEIGHT로 설정
 	glViewport(0, 0, w, h);
 }
 
-GLvoid InitBuffer()
+GLvoid initBuffer()
 {
 	glGenVertexArrays(1, &VAO);
 
 	glGenBuffers(2, VBO);
 	glGenBuffers(1, &EBO);
+	glGenTextures(1, &texture);
 
-	InitObjects();
+	initObjects();
 }
 
-GLvoid InitObjects()
+GLvoid initObjects()
 {
-	m_ObjectManager->Reset();
+	m_ObjectManager->reset();
 
 	// 체스판 생성
-	m_ObjectManager->CreatBoard(&idx);
+	m_ObjectManager->creatBoard(&idx);
 
 	// 플레이어 생성
-	playerIDX = m_ObjectManager->CreatPlayer(&idx);
+	playerIDX = m_ObjectManager->creatPlayer(&idx);
 
 	// 카메라 세팅
 	camera = glm::translate(camera, glm::vec3(0.0f, 0.0f, -10.0f));
 }
 
-char* GetBuf(const char* file)
+char* getBuf(const char* file)
 {
 	FILE* fptr;
 	long length;
@@ -117,10 +120,10 @@ char* GetBuf(const char* file)
 	return buf;
 }
 
-GLint CreateShader(const char* file, int type)
+GLint createShader(const char* file, int type)
 {
 	// glsl 파일 읽기
-	GLchar* source = GetBuf(file);
+	GLchar* source = getBuf(file);
 
 	// 객체 생성
 	GLint shader = glCreateShader(type);
@@ -142,10 +145,10 @@ GLint CreateShader(const char* file, int type)
 	return shader;
 }
 
-void CreateShaderProgram()
+void createShaderProgram()
 {
-	vertexShader = CreateShader("vertex.glsl", GL_VERTEX_SHADER);
-	fragmentShader = CreateShader("fragment.glsl", GL_FRAGMENT_SHADER);
+	vertexShader = createShader("vertex.glsl", GL_VERTEX_SHADER);
+	fragmentShader = createShader("fragment.glsl", GL_FRAGMENT_SHADER);
 
 	// 세이더 프로그램 생성
 	shaderProgramID = glCreateProgram();
@@ -161,32 +164,32 @@ void CreateShaderProgram()
 	glUseProgram(shaderProgramID);
 }
 
-GLvoid Render()
+GLvoid render()
 {
 	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	DrawView();
-	DrawProjection();
+	drawView();
+	drawProjection();
 	for (int i = 0; i < m_ObjectManager->m_ObjectList.size(); i++)
 	{
-		if (m_ObjectManager->m_ObjectList[i]->IsActive())
+		if (m_ObjectManager->m_ObjectList[i]->isActive())
 		{
-			DrawObjects(i);
+			drawObjects(i);
 		}
 	}
 
 	glutSwapBuffers();
 }
 
-void DrawView()
+void drawView()
 {
 	unsigned int viewLocation = glGetUniformLocation(shaderProgramID, "viewTransform");
 
 	glUniformMatrix4fv(viewLocation, 1, GL_FALSE,glm::value_ptr(camera));
 }
 
-void DrawProjection()
+void drawProjection()
 {
 	unsigned int projectionLocation = glGetUniformLocation(shaderProgramID, "projectionTransform");
 
@@ -202,11 +205,11 @@ void DrawProjection()
 	glUniformMatrix4fv(projectionLocation, 1, GL_FALSE, &projection[0][0]);		// 투영변환
 }
 
-void DrawObjects(int idx)	
+void drawObjects(int idx)	
 {
 	// Model
 	unsigned int modelLocation = glGetUniformLocation(shaderProgramID, "modelTransform");
-	m_ObjectManager->m_ObjectList[idx]->m_model = m_ObjectManager->TransformModel(idx);
+	m_ObjectManager->m_ObjectList[idx]->m_model = m_ObjectManager->transformModel(idx);
 	glUniformMatrix4fv(modelLocation, 1, GL_FALSE, glm::value_ptr(m_ObjectManager->m_ObjectList[idx]->m_model));
 
 	// Position / Color
@@ -225,28 +228,27 @@ void DrawObjects(int idx)
 	glEnableVertexAttribArray(1);
 	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), 0);
 
-
 	glDrawElements(GL_TRIANGLES, m_ObjectManager->m_ObjectList[idx]->m_index.size(), GL_UNSIGNED_INT, 0);
 
 	glDisableVertexAttribArray(0);
 	glDisableVertexAttribArray(1);
 }
 
-void SpecialKeyBoard(int key, int x, int y)
+void specialKeyBoard(int key, int x, int y)
 {
 	// 스페설 키보드 입력 처리
 	switch (key) {
 	case GLUT_KEY_LEFT:
-		m_ObjectManager->GoLeft(playerIDX);
+		m_ObjectManager->goLeft(playerIDX);
 		break;
 	case GLUT_KEY_RIGHT:
-		m_ObjectManager->GoRight(playerIDX);
+		m_ObjectManager->goRight(playerIDX);
 		break;
 	case GLUT_KEY_UP:
-		m_ObjectManager->GoUp(playerIDX);
+		m_ObjectManager->goUp(playerIDX);
 		break;
 	case GLUT_KEY_DOWN:
-		m_ObjectManager->GoDown(playerIDX);
+		m_ObjectManager->goDown(playerIDX);
 		break;
 	}
 	glutPostRedisplay();

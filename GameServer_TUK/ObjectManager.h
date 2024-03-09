@@ -14,26 +14,29 @@ public:
 	ObjectManager();
 	~ObjectManager();
 
-	void CreateRect(int* idx, highp_vec3 color);
-	void CreatBoard(int* idx);
+	void creatFigure(int* idx, highp_vec3 color, GLfloat* vertexs);
+	void createRect(int* idx, highp_vec3 color);
+	void creatBoard(int* idx);
 
-	int CreatPlayer(int* idx);
+	int creatPlayer(int* idx);
 
-	void SetPosition(int idx, float x, float y, float z);
-	void SetPosition(int idx, vec3 position);
+	void setPosition(int idx, float x, float y, float z);
+	void setPosition(int idx, vec3 position);
 
-	void Move(int idx, float x, float y, float z);
-	void Move(int idx, vec3 position);
+	void move(int idx, float x, float y, float z);
+	void move(int idx, vec3 position);
 
-	void GoUp(int idx);
-	void GoDown(int idx);
-	void GoLeft(int idx);
-	void GoRight(int idx);
+	void goUp(int idx);
+	void goDown(int idx);
+	void goLeft(int idx);
+	void goRight(int idx);
 
-	void Reset();
+	void reset();
 
-	bool IsActive(int idx);
+	bool isActive(int idx);
+
+	void setChild(int idx, int child);
 
 public:
-	mat4 TransformModel(int idx);
+	mat4 transformModel(int idx);
 };

@@ -9,58 +9,65 @@ Object::Object()
 	m_scale = vec3(1.f);
 
 	m_bActive = true;
+
+	childs.clear();
 }
 
 Object::~Object()
 {
 }
 
-void Object::SetPosition(float x, float y, float z)
+void Object::setPosition(float x, float y, float z)
 {
 	m_position.x = x;
 	m_position.y = y;
 	m_position.z = z;
 }
 
-void Object::SetRotate(float x, float y, float z)
+void Object::setRotate(float x, float y, float z)
 {
 }
 
-void Object::SetScale(float x, float y, float z)
+void Object::setScale(float x, float y, float z)
 {
 }
 
-void Object::SetActive(bool bActive)
+void Object::setActive(bool bActive)
 {
 	m_bActive = bActive;
 }
 
-void Object::SetPosition(vec3 position)
+void Object::setPosition(vec3 position)
 {
 	m_position = position;
 }
 
-void Object::Move(float x, float y, float z)
+void Object::move(float x, float y, float z)
 {
 	m_position.x += x;
 	m_position.y += y;
 	m_position.z += z;
 }
 
-void Object::Rotate(float x, float y, float z)
+void Object::rotate(float x, float y, float z)
 {
 }
 
-void Object::Scale(float x, float y, float z)
+void Object::scale(float x, float y, float z)
 {
 }
 
-void Object::Move(vec3 position)
+void Object::move(vec3 position)
 {
 	m_position = position;
 }
 
-bool Object::IsActive()
+bool Object::isActive()
 {
 	return m_bActive;
+}
+
+void Object::setChild(int idx)
+{
+	childs.push_back(idx);
 }

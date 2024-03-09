@@ -19,6 +19,27 @@ GLint Figure::RectIndecies[6] = {
 	0, 2, 3
 };
 
+GLfloat Figure::PlayerVertex[12] = {
+	-0.1f, 0.3f, 0.0f,
+	-0.1f, -0.3f, 0.0f,
+	0.1f, -0.3f, 0.0f,
+	0.1f, 0.3f, 0.0f
+};
+
+GLfloat Figure::PlayerVertex2[12] = {
+	-0.2f, 0.3f, 0.0f,
+	-0.2f, 0.2f, 0.0f,
+	0.2f, 0.2f, 0.0f,
+	0.2f, 0.3f, 0.0f
+};
+
+GLfloat Figure::PlayerVertex3[12] = {
+	-0.3f, -0.3f, 0.0f,
+	-0.3f, -0.2f, 0.0f,
+	0.3f, -0.2f, 0.0f,
+	0.3f, -0.3f, 0.0f
+};
+
 GLfloat Figure::board[8] = { -3.5f, -2.5f, -1.5f, -0.5f, 0.5f, 1.5f, 2.5f, 3.5f };
 
 vector<vec3> Figure::Boards = {

@@ -14,6 +14,8 @@ public :
 	highp_vec3	m_colors;
 	bool		m_bActive;
 
+	vector<int> childs;
+
 public:
 	vector<GLfloat> m_pos;
 	vector<GLfloat> m_col;
@@ -23,18 +25,20 @@ public:
 	Object();
 	~Object();
 
-	void SetPosition(float x, float y, float z);
-	void SetRotate(float x, float y, float z);
-	void SetScale(float x, float y, float z);
-	void SetActive(bool bActive);	
+	void setPosition(float x, float y, float z);
+	void setRotate(float x, float y, float z);
+	void setScale(float x, float y, float z);
+	void setActive(bool bActive);	
 
-	void SetPosition(vec3 position);
+	void setPosition(vec3 position);
 
-	void Move(float x, float y, float z);
-	void Rotate(float x, float y, float z);
-	void Scale(float x, float y, float z);
+	void move(float x, float y, float z);
+	void rotate(float x, float y, float z);
+	void scale(float x, float y, float z);
 
-	void Move(vec3 position);
+	void move(vec3 position);
 
-	bool IsActive();
+	bool isActive();
+
+	void setChild(int idx);
 };

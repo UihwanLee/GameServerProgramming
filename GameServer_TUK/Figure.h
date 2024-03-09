@@ -13,6 +13,10 @@ public:
 	static GLfloat	RectColors[12];
 	static GLint	RectIndecies[6];
 
+	static GLfloat	PlayerVertex[12];
+	static GLfloat	PlayerVertex2[12];
+	static GLfloat	PlayerVertex3[12];
+
 	// Ã¼½ºÆÇ Position
 	static vector<vec3> Boards;
 

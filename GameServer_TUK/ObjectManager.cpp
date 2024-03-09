@@ -13,7 +13,26 @@ ObjectManager::~ObjectManager()
 	}
 }
 
-void ObjectManager::CreateRect(int* idx, highp_vec3 color)
+void ObjectManager::creatFigure(int* idx, highp_vec3 color, GLfloat* vertexs)
+{
+	*idx += 1;
+
+	Object* object = new Object();
+
+	for (int i = 0; i < 12; i++) object->m_pos.emplace_back(vertexs[i]);
+	for (int i = 0; i < 6; i++) object->m_index.emplace_back(Figure::RectIndecies[i]);
+
+	for (int i = 0; i < 4; i++)
+	{
+		object->m_col.emplace_back(color.r);
+		object->m_col.emplace_back(color.g);
+		object->m_col.emplace_back(color.b);
+	}
+
+	m_ObjectList.emplace_back(object);
+}
+
+void ObjectManager::createRect(int* idx, highp_vec3 color)
 {
 	*idx += 1;
 
@@ -32,7 +51,7 @@ void ObjectManager::CreateRect(int* idx, highp_vec3 color)
 	m_ObjectList.emplace_back(object);
 }
 
-void ObjectManager::CreatBoard(int *idx)
+void ObjectManager::creatBoard(int *idx)
 {
 	// 체스판 만들기
 	int index;
@@ -41,95 +60,137 @@ void ObjectManager::CreatBoard(int *idx)
 		index = *idx + 1;
 		if ((index / 8) % 2 == 0)
 		{
-			CreateRect(idx, (*idx % 2 != 0) ? Figure::boardColorType1 : Figure::boardColorType2);
+			createRect(idx, (*idx % 2 != 0) ? Figure::boardColorType1 : Figure::boardColorType2);
 		}
 		else
 		{
-			CreateRect(idx, (*idx % 2 == 0) ? Figure::boardColorType1 : Figure::boardColorType2);
+			createRect(idx, (*idx % 2 == 0) ? Figure::boardColorType1 : Figure::boardColorType2);
 		}
-		SetPosition(*idx, board);
+		setPosition(*idx, board);
 	}
 }
 
-int ObjectManager::CreatPlayer(int* idx)
+int ObjectManager::creatPlayer(int* idx)
 {
-	CreateRect(idx, highp_vec3(1.0f, 0.0f, 0.0f));
-	SetPosition(*idx, Figure::Boards[currentIDX]);
+	creatFigure(idx, highp_vec3(0.0f, 0.0f, 0.0f), Figure::PlayerVertex);
+	setPosition(*idx, Figure::Boards[currentIDX]);
+	setChild(*idx, *idx + 1);
+	setChild(*idx, *idx + 2);
 
-	return *idx;
+	creatFigure(idx, highp_vec3(0.0f, 0.0f, 0.0f), Figure::PlayerVertex2);
+	setPosition(*idx, Figure::Boards[currentIDX]);
+
+	creatFigure(idx, highp_vec3(0.0f, 0.0f, 0.0f), Figure::PlayerVertex3);
+	setPosition(*idx, Figure::Boards[currentIDX]);
+
+	return *idx-2;
 }
 
-void ObjectManager::SetPosition(int idx, float x, float y, float z)
-{
-	if (m_ObjectList.empty()) return;
-
-	m_ObjectList[idx]->SetPosition(x, y, z);
-}
-
-void ObjectManager::SetPosition(int idx, vec3 position)
-{
-	if (m_ObjectList.empty()) return;
-
-	m_ObjectList[idx]->SetPosition(position);
-}
-
-void ObjectManager::Move(int idx, float x, float y, float z)
+void ObjectManager::setPosition(int idx, float x, float y, float z)
 {
 	if (m_ObjectList.empty()) return;
 
-	m_ObjectList[idx]->Move(x, y, z);
+	m_ObjectList[idx]->setPosition(x, y, z);
+
+	// 자식이 존재한다면 자식에게도 적용
+	if (!m_ObjectList[idx]->childs.empty()) {
+		for (int i = 0; i < m_ObjectList[idx]->childs.size(); i++){
+			m_ObjectList[m_ObjectList[idx]->childs[i]]->setPosition(x, y, z);
+		}
+	}
 }
 
-void ObjectManager::Move(int idx, vec3 position)
+void ObjectManager::setPosition(int idx, vec3 position)
 {
 	if (m_ObjectList.empty()) return;
 
-	m_ObjectList[idx]->Move(position);
+	m_ObjectList[idx]->setPosition(position);
+
+	// 자식이 존재한다면 자식에게도 적용
+	if (!m_ObjectList[idx]->childs.empty()) {
+		for (int i = 0; i < m_ObjectList[idx]->childs.size(); i++) {
+			m_ObjectList[m_ObjectList[idx]->childs[i]]->setPosition(position);
+		}
+	}
 }
 
-void ObjectManager::GoUp(int idx)
+void ObjectManager::move(int idx, float x, float y, float z)
+{
+	if (m_ObjectList.empty()) return;
+
+	m_ObjectList[idx]->move(x, y, z);
+
+	// 자식이 존재한다면 자식에게도 적용
+	if (!m_ObjectList[idx]->childs.empty()) {
+		for (int i = 0; i < m_ObjectList[idx]->childs.size(); i++) {
+			m_ObjectList[m_ObjectList[idx]->childs[i]]->move(x, y, z);
+		}
+	}
+}
+
+void ObjectManager::move(int idx, vec3 position)
+{
+	if (m_ObjectList.empty()) return;
+
+	m_ObjectList[idx]->move(position);
+
+	// 자식이 존재한다면 자식에게도 적용
+	if (!m_ObjectList[idx]->childs.empty()) {
+		for (int i = 0; i < m_ObjectList[idx]->childs.size(); i++) {
+			m_ObjectList[m_ObjectList[idx]->childs[i]]->move(position);
+		}
+	}
+}
+
+void ObjectManager::goUp(int idx)
 {
 	if (currentIDX - 8 < 0) return;
 
 	currentIDX = currentIDX - 8;
-	m_ObjectList[idx]->SetPosition(Figure::Boards[currentIDX]);
+
+	setPosition(idx, Figure::Boards[currentIDX]);
 }
 
-void ObjectManager::GoDown(int idx)
+void ObjectManager::goDown(int idx)
 {
 	if (currentIDX + 8 >= Figure::Boards.size()) return;
 
 	currentIDX = currentIDX + 8;
-	m_ObjectList[idx]->SetPosition(Figure::Boards[currentIDX]);
+	setPosition(idx, Figure::Boards[currentIDX]);
 }
 
-void ObjectManager::GoLeft(int idx)
+void ObjectManager::goLeft(int idx)
 {
 	if (currentIDX % 8 - 1 < 0) return;
 
 	currentIDX = currentIDX - 1;
-	m_ObjectList[idx]->SetPosition(Figure::Boards[currentIDX]);
+	setPosition(idx, Figure::Boards[currentIDX]);
 }
 
-void ObjectManager::GoRight(int idx)
+void ObjectManager::goRight(int idx)
 {
 	if (currentIDX % 8 + 1 >= 8) return;
 
 	currentIDX = currentIDX + 1;
-	m_ObjectList[idx]->SetPosition(Figure::Boards[currentIDX]);
+	setPosition(idx, Figure::Boards[currentIDX]);
 }
 
-void ObjectManager::Reset()
+void ObjectManager::reset()
 {
 	m_ObjectList.clear();
 }
 
-bool ObjectManager::IsActive(int idx)
+bool ObjectManager::isActive(int idx)
 {
-	return m_ObjectList[idx]->IsActive();
+	return m_ObjectList[idx]->isActive();
 }
 
-mat4 ObjectManager::TransformModel(int idx)
+void ObjectManager::setChild(int idx, int child)
+{
+	m_ObjectList[idx]->setChild(child);
+}
+
+mat4 ObjectManager::transformModel(int idx)
 {
 	mat4 model = glm::mat4(1.0f);
 	mat4 scale = glm::mat4(1.0f);
