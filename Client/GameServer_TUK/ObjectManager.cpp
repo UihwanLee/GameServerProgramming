@@ -142,39 +142,6 @@ void ObjectManager::move(int idx, vec3 position)
 	}
 }
 
-void ObjectManager::goUp(int idx)
-{
-	if (currentIDX - 8 < 0) return;
-
-	currentIDX = currentIDX - 8;
-
-	setPosition(idx, Figure::Boards[currentIDX]);
-}
-
-void ObjectManager::goDown(int idx)
-{
-	if (currentIDX + 8 >= Figure::Boards.size()) return;
-
-	currentIDX = currentIDX + 8;
-	setPosition(idx, Figure::Boards[currentIDX]);
-}
-
-void ObjectManager::goLeft(int idx)
-{
-	if (currentIDX % 8 - 1 < 0) return;
-
-	currentIDX = currentIDX - 1;
-	setPosition(idx, Figure::Boards[currentIDX]);
-}
-
-void ObjectManager::goRight(int idx)
-{
-	if (currentIDX % 8 + 1 >= 8) return;
-
-	currentIDX = currentIDX + 1;
-	setPosition(idx, Figure::Boards[currentIDX]);
-}
-
 void ObjectManager::reset()
 {
 	m_ObjectList.clear();
@@ -221,4 +188,14 @@ mat4 ObjectManager::transformModel(int idx)
 	}
 
 	return model;
+}
+
+void ObjectManager::setCurrentIDX(int idx)
+{
+	currentIDX = idx;
+}
+
+int ObjectManager::getCurrentIDX()
+{
+	return currentIDX;
 }

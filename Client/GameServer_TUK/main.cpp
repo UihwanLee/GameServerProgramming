@@ -55,9 +55,10 @@ ObjectManager* m_ObjectManager = new ObjectManager();
 
 #pragma pack (push, 1)
 struct move_packet {
-	short size;
-	char  type;
-	float x, y, z;
+	short		size;
+	char		type;
+	int			idx;
+	glm::vec3	pos;
 };
 #pragma pack (pop)
 
@@ -330,9 +331,8 @@ void specialKeyBoard(int key, int x, int y)
 			move_packet p;
 			p.size = sizeof(move_packet);
 			p.type = '1';
-			p.x = 0.0f;
-			p.y = 0.0f;
-			p.z = 0.0f;
+			p.idx = m_ObjectManager->getCurrentIDX();
+			p.pos = glm::vec3(0.0f, 0.0f, 0.0f);
 
 			char buf[1];
 			buf[0] = ' ';
@@ -354,18 +354,23 @@ void specialKeyBoard(int key, int x, int y)
 			DWORD recv_size;
 			DWORD recv_flag = 0;
 			WSARecv(server_s, &buffer, 1, &recv_size, &recv_flag, nullptr, nullptr);
+
+			if (p.pos != glm::vec3(0.0f, 0.0f, 0.0f))
+			{
+				// 서버에서 받은 Position으로 말 이동
+				std::cout << "[Client] 말 vec3(" << p.pos.x << ", " << p.pos.y << ", " << p.pos.z << ")로 이동!" << std::endl;
+				m_ObjectManager->setPosition(playerIDX, p.pos);
+				m_ObjectManager->setCurrentIDX(p.idx);
+			}
 		}
-		m_ObjectManager->goLeft(playerIDX);
 		break;
 	case GLUT_KEY_RIGHT:
-		m_ObjectManager->goRight(playerIDX);
 		{
 			move_packet p;
 			p.size = sizeof(move_packet);
 			p.type = '2';
-			p.x = 0.0f;
-			p.y = 0.0f;
-			p.z = 0.0f;
+			p.idx = m_ObjectManager->getCurrentIDX();
+			p.pos = glm::vec3(0.0f, 0.0f, 0.0f);
 
 			char buf[1];
 			buf[0] = ' ';
@@ -387,17 +392,23 @@ void specialKeyBoard(int key, int x, int y)
 			DWORD recv_size;
 			DWORD recv_flag = 0;
 			WSARecv(server_s, &buffer, 1, &recv_size, &recv_flag, nullptr, nullptr);
+
+			if (p.pos != glm::vec3(0.0f, 0.0f, 0.0f))
+			{
+				// 서버에서 받은 Position으로 말 이동
+				std::cout << "[Client] 말 vec3(" << p.pos.x << ", " << p.pos.y << ", " << p.pos.z << ")로 이동!" << std::endl;
+				m_ObjectManager->setPosition(playerIDX, p.pos);
+				m_ObjectManager->setCurrentIDX(p.idx);
+			}
 		}
 		break;
 	case GLUT_KEY_UP:
-		m_ObjectManager->goUp(playerIDX);
 		{
 			move_packet p;
 			p.size = sizeof(move_packet);
 			p.type = '3';
-			p.x = 0.0f;
-			p.y = 0.0f;
-			p.z = 0.0f;
+			p.idx = m_ObjectManager->getCurrentIDX();
+			p.pos = glm::vec3(0.0f, 0.0f, 0.0f);
 
 			char buf[1];
 			buf[0] = ' ';
@@ -419,18 +430,24 @@ void specialKeyBoard(int key, int x, int y)
 			DWORD recv_size;
 			DWORD recv_flag = 0;
 			WSARecv(server_s, &buffer, 1, &recv_size, &recv_flag, nullptr, nullptr);
+
+			if (p.pos != glm::vec3(0.0f, 0.0f, 0.0f))
+			{
+				// 서버에서 받은 Position으로 말 이동
+				std::cout << "[Client] 말 vec3(" << p.pos.x << ", " << p.pos.y << ", " << p.pos.z << ")로 이동!" << std::endl;
+				m_ObjectManager->setPosition(playerIDX, p.pos);
+				m_ObjectManager->setCurrentIDX(p.idx);
+			}
 		}
 		break;
 	case GLUT_KEY_DOWN:
-		m_ObjectManager->goDown(playerIDX);
 		{
 			{
 				move_packet p;
 				p.size = sizeof(move_packet);
 				p.type = '4';
-				p.x = 0.0f;
-				p.y = 0.0f;
-				p.z = 0.0f;
+				p.idx = m_ObjectManager->getCurrentIDX();
+				p.pos = glm::vec3(0.0f, 0.0f, 0.0f);
 
 				char buf[1];
 				buf[0] = ' ';
@@ -452,6 +469,14 @@ void specialKeyBoard(int key, int x, int y)
 				DWORD recv_size;
 				DWORD recv_flag = 0;
 				WSARecv(server_s, &buffer, 1, &recv_size, &recv_flag, nullptr, nullptr);
+				
+				if (p.pos != glm::vec3(0.0f, 0.0f, 0.0f))
+				{
+					// 서버에서 받은 Position으로 말 이동
+					std::cout << "[Client] 말 vec3(" << p.pos.x << ", " << p.pos.y << ", " << p.pos.z << ")로 이동!" << std::endl;
+					m_ObjectManager->setPosition(playerIDX, p.pos);
+					m_ObjectManager->setCurrentIDX(p.idx);
+				}
 			}
 		}
 		break;

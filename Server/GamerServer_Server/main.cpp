@@ -1,6 +1,5 @@
-#include <iostream>
-#include <WS2tcpip.h>
-#pragma comment (lib, "WS2_32.LIB")
+#include "pch.h"
+#include "Figure.h"
 
 constexpr short PORT = 4000;
 constexpr int BUFSIZE = 256;
@@ -9,9 +8,15 @@ constexpr int BUFSIZE = 256;
 struct move_packet {
 	short size;
 	char  type;
-	float x, y, z;
+	int   idx;
+	glm::vec3 pos;
 };
 #pragma pack (pop)
+
+GLvoid goLeft(move_packet& receivedPacket);
+GLvoid goRight(move_packet &receivedPacket);
+GLvoid goUp(move_packet& receivedPacket);
+GLvoid goDown(move_packet& receivedPacket);
 
 void print_error(const char* msg, int err_no)
 {
@@ -104,16 +109,62 @@ int main(void)
 		if (0 == bytesReceived)
 			break;
 
-
-		std::cout << "Client Send : " << std::endl;
-		std::cout << "Size: " << receivedPacket.size << std::endl;
-		std::cout << "Type: " << receivedPacket.type << std::endl;
-
 		DWORD sent_size;
+
+		if (receivedPacket.type == '0') break;
+		else if (receivedPacket.type == '1')	goLeft(receivedPacket);
+		else if (receivedPacket.type == '2')	goRight(receivedPacket);
+		else if (receivedPacket.type == '3')	goUp(receivedPacket);
+		else if (receivedPacket.type == '4')	goDown(receivedPacket);
+
 		WSASend(client_s, &buffer, 1, &sent_size, 0, nullptr, nullptr);
 	}
 	std::cout << "[Server] 서버 클라이언트 접속 종료!" << std::endl;
 	closesocket(server_s);
 	closesocket(client_s);
 	WSACleanup();
+}
+
+GLvoid goLeft(move_packet& receivedPacket)
+{
+	std::cout << "[Server] 클라이언트 말 왼쪽 이동 요청!" << std::endl;
+
+	if (receivedPacket.idx % 8 - 1 < 0) return;
+
+	// 왼쪽 이동
+	receivedPacket.idx = receivedPacket.idx - 1;
+	receivedPacket.pos = Figure::Boards[receivedPacket.idx];
+}
+
+GLvoid goRight(move_packet& receivedPacket)
+{
+	std::cout << "[Server] 클라이언트 말 오른쪽 이동 요청!" << std::endl;
+
+	if (receivedPacket.idx % 8 + 1 >= 8) return;
+
+	// 오른쪽 이동
+	receivedPacket.idx = receivedPacket.idx + 1;
+	receivedPacket.pos = Figure::Boards[receivedPacket.idx];
+}
+
+GLvoid goUp(move_packet& receivedPacket)
+{
+	std::cout << "[Server] 클라이언트 말 위 이동 요청!" << std::endl;
+
+	if (receivedPacket.idx - 8 < 0) return;
+
+	// 위로 이동
+	receivedPacket.idx = receivedPacket.idx - 8;
+	receivedPacket.pos = Figure::Boards[receivedPacket.idx];
+}
+
+GLvoid goDown(move_packet& receivedPacket)
+{
+	std::cout << "[Server] 클라이언트 말 아래 이동 요청!" << std::endl;
+
+	if (receivedPacket.idx + 8 >= Figure::Boards.size()) return;
+
+	// 아래로 이동
+	receivedPacket.idx = receivedPacket.idx + 8;
+	receivedPacket.pos = Figure::Boards[receivedPacket.idx];
 }

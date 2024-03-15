@@ -26,11 +26,6 @@ public:
 	void move(int idx, float x, float y, float z);
 	void move(int idx, vec3 position);
 
-	void goUp(int idx);
-	void goDown(int idx);
-	void goLeft(int idx);
-	void goRight(int idx);
-
 	void reset();
 
 	bool isActive(int idx);
@@ -39,4 +34,6 @@ public:
 
 public:
 	mat4 transformModel(int idx);
+	void setCurrentIDX(int idx);
+	int getCurrentIDX();
 };
