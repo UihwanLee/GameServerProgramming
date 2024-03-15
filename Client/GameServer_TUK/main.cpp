@@ -9,12 +9,15 @@ constexpr char SERVER_ADDR[] = "127.0.0.1";
 constexpr int BUFSIZE = 256;
 
 // 서버 
-GLvoid server();
+GLvoid initServer();
 GLvoid client(int argc, char** argv);
+
+SOCKET server_s;
 
 // 콜벡 함수
 GLvoid render(GLvoid);
 GLvoid reshape(int w, int h);
+GLvoid keyBoard(unsigned char key, int x, int y);
 GLvoid specialKeyBoard(int key, int x, int y);
 
 // Texture
@@ -50,13 +53,21 @@ void drawObjects(int idx);
 // 오브젝트 리스트
 ObjectManager* m_ObjectManager = new ObjectManager();
 
+#pragma pack (push, 1)
+struct move_packet {
+	short size;
+	char  type;
+	float x, y, z;
+};
+#pragma pack (pop)
+
 void main(int argc, char** argv)
 {
-	server();
-	//client(argc, argv);
+	initServer();
+	client(argc, argv);
 }
 
-GLvoid server()
+GLvoid initServer()
 {
 	std::wcout.imbue(locale("korean"));
 
@@ -65,44 +76,35 @@ GLvoid server()
 	WSAStartup(MAKEWORD(2, 0), &WSAData);
 
 	// SOCKET 생성
-	SOCKET server_s = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, nullptr, 0, 0);
+	server_s = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, nullptr, 0, 0);
+	if (server_s == INVALID_SOCKET)
+	{
+		std::cerr << "Failed to create socket." << std::endl;
+		WSACleanup();
+		return;
+	}
 
 	// SOCK ADDR 생성
+	//char SERVER_ADDR[10];
+	//std::cout << "Enter ADDR: ";
+	//std::cin.getline(SERVER_ADDR, 10);
+
 	SOCKADDR_IN server_a;
 
 	server_a.sin_family = AF_INET;
 	server_a.sin_port = htons(PORT);
 	inet_pton(AF_INET, SERVER_ADDR, &server_a.sin_addr);
 
-	connect(server_s, reinterpret_cast<sockaddr *>(& server_a), sizeof(server_a));
-
-	while (true) {
-		char buf[BUFSIZE];
-
-		std::cout << "Enter Message: ";
-		std::cin.getline(buf, BUFSIZE);
-
-		WSABUF wsabuf[1];
-		wsabuf[0].buf = buf;
-		wsabuf[0].len = static_cast<int>(strlen(buf)) + 1;
-
-		if (wsabuf[0].len == 1)
-			break;
-
-		DWORD sent_size;
-		WSASend(server_s, wsabuf, 1, &sent_size, 0, 0, 0);
-
-		wsabuf[0].len = BUFSIZE;
-		DWORD recv_size;
-		DWORD recv_flag = 0;
-		WSARecv(server_s, wsabuf, 1, &recv_size, &recv_flag, nullptr, nullptr);
-
-		for (DWORD i = 0; i < recv_size; ++i)
-			std::cout << buf[i];
-		std::cout << std::endl;
+	if (connect(server_s, reinterpret_cast<sockaddr*>(&server_a), sizeof(server_a)) == SOCKET_ERROR)
+	{
+		std::cerr << "Failed to connect to server.\n";
+		closesocket(server_s);
+		WSACleanup();
+		return;
 	}
-	closesocket(server_s);
-	WSACleanup();
+
+	std::cout << "[Client] 클라이언트 서버 접속 성공" << std::endl;
+	std::cout << "[Client] 명령어 q: 서버 접속 종료" << std::endl;
 }
 
 GLvoid client(int argc, char** argv)
@@ -124,6 +126,7 @@ GLvoid client(int argc, char** argv)
 	glutDisplayFunc(render);
 
 	// 키보드
+	glutKeyboardFunc(keyBoard);
 	glutSpecialFunc(specialKeyBoard);
 
 	glutMainLoop();
@@ -300,21 +303,157 @@ void drawObjects(int idx)
 	glDisableVertexAttribArray(1);
 }
 
+void keyBoard(unsigned char key, int x, int y)
+{
+	// 키보드 입력
+	switch (key)
+	{
+	case 'Q':
+	case 'q':
+		// 클라이언트 서버 접속 종료
+		std::cout << "[Client] 클라이언트 서버 접속 종료!" << std::endl;
+		glutLeaveMainLoop();
+		closesocket(server_s);
+		WSACleanup();
+		break;
+	default:
+		break;
+	}
+}
+
 void specialKeyBoard(int key, int x, int y)
 {
 	// 스페설 키보드 입력 처리
 	switch (key) {
 	case GLUT_KEY_LEFT:
+		{
+			move_packet p;
+			p.size = sizeof(move_packet);
+			p.type = '1';
+			p.x = 0.0f;
+			p.y = 0.0f;
+			p.z = 0.0f;
+
+			char buf[1];
+			buf[0] = ' ';
+
+			WSABUF buffer;
+			buffer.len = sizeof(move_packet);
+			buffer.buf = reinterpret_cast<CHAR*>(&p);
+
+			DWORD sent_size;
+			int result = WSASend(server_s, &buffer, 1, &sent_size, 0, 0, 0);
+
+			if (result == SOCKET_ERROR) {
+				std::cerr << "Failed to send data. Error code: " << WSAGetLastError() << std::endl;
+				closesocket(server_s);
+				WSACleanup();
+				return;
+			}
+
+			DWORD recv_size;
+			DWORD recv_flag = 0;
+			WSARecv(server_s, &buffer, 1, &recv_size, &recv_flag, nullptr, nullptr);
+		}
 		m_ObjectManager->goLeft(playerIDX);
 		break;
 	case GLUT_KEY_RIGHT:
 		m_ObjectManager->goRight(playerIDX);
+		{
+			move_packet p;
+			p.size = sizeof(move_packet);
+			p.type = '2';
+			p.x = 0.0f;
+			p.y = 0.0f;
+			p.z = 0.0f;
+
+			char buf[1];
+			buf[0] = ' ';
+
+			WSABUF buffer;
+			buffer.len = sizeof(move_packet);
+			buffer.buf = reinterpret_cast<CHAR*>(&p);
+
+			DWORD sent_size;
+			int result = WSASend(server_s, &buffer, 1, &sent_size, 0, 0, 0);
+
+			if (result == SOCKET_ERROR) {
+				std::cerr << "Failed to send data. Error code: " << WSAGetLastError() << std::endl;
+				closesocket(server_s);
+				WSACleanup();
+				return;
+			}
+
+			DWORD recv_size;
+			DWORD recv_flag = 0;
+			WSARecv(server_s, &buffer, 1, &recv_size, &recv_flag, nullptr, nullptr);
+		}
 		break;
 	case GLUT_KEY_UP:
 		m_ObjectManager->goUp(playerIDX);
+		{
+			move_packet p;
+			p.size = sizeof(move_packet);
+			p.type = '3';
+			p.x = 0.0f;
+			p.y = 0.0f;
+			p.z = 0.0f;
+
+			char buf[1];
+			buf[0] = ' ';
+
+			WSABUF buffer;
+			buffer.len = sizeof(move_packet);
+			buffer.buf = reinterpret_cast<CHAR*>(&p);
+
+			DWORD sent_size;
+			int result = WSASend(server_s, &buffer, 1, &sent_size, 0, 0, 0);
+
+			if (result == SOCKET_ERROR) {
+				std::cerr << "Failed to send data. Error code: " << WSAGetLastError() << std::endl;
+				closesocket(server_s);
+				WSACleanup();
+				return;
+			}
+
+			DWORD recv_size;
+			DWORD recv_flag = 0;
+			WSARecv(server_s, &buffer, 1, &recv_size, &recv_flag, nullptr, nullptr);
+		}
 		break;
 	case GLUT_KEY_DOWN:
 		m_ObjectManager->goDown(playerIDX);
+		{
+			{
+				move_packet p;
+				p.size = sizeof(move_packet);
+				p.type = '4';
+				p.x = 0.0f;
+				p.y = 0.0f;
+				p.z = 0.0f;
+
+				char buf[1];
+				buf[0] = ' ';
+
+				WSABUF buffer;
+				buffer.len = sizeof(move_packet);
+				buffer.buf = reinterpret_cast<CHAR*>(&p);
+
+				DWORD sent_size;
+				int result = WSASend(server_s, &buffer, 1, &sent_size, 0, 0, 0);
+
+				if (result == SOCKET_ERROR) {
+					std::cerr << "Failed to send data. Error code: " << WSAGetLastError() << std::endl;
+					closesocket(server_s);
+					WSACleanup();
+					return;
+				}
+
+				DWORD recv_size;
+				DWORD recv_flag = 0;
+				WSARecv(server_s, &buffer, 1, &recv_size, &recv_flag, nullptr, nullptr);
+			}
+		}
 		break;
 	}
 	glutPostRedisplay();
