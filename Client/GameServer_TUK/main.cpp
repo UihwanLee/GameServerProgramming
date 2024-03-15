@@ -1,6 +1,17 @@
 #include "pch.h"
 #include "ObjectManager.h"
 
+#include <WS2tcpip.h>
+#pragma comment (lib, "WS2_32.LIB")
+
+constexpr short PORT = 4000;
+constexpr char SERVER_ADDR[] = "127.0.0.1";
+constexpr int BUFSIZE = 256;
+
+// 서버 
+GLvoid server();
+GLvoid client(int argc, char** argv);
+
 // 콜벡 함수
 GLvoid render(GLvoid);
 GLvoid reshape(int w, int h);
@@ -40,6 +51,61 @@ void drawObjects(int idx);
 ObjectManager* m_ObjectManager = new ObjectManager();
 
 void main(int argc, char** argv)
+{
+	server();
+	//client(argc, argv);
+}
+
+GLvoid server()
+{
+	std::wcout.imbue(locale("korean"));
+
+	// window 네트워크 프로그래밍 시 옛날에 만든 프로그램과의 호환성을 위해 필요
+	WSADATA WSAData;
+	WSAStartup(MAKEWORD(2, 0), &WSAData);
+
+	// SOCKET 생성
+	SOCKET server_s = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, nullptr, 0, 0);
+
+	// SOCK ADDR 생성
+	SOCKADDR_IN server_a;
+
+	server_a.sin_family = AF_INET;
+	server_a.sin_port = htons(PORT);
+	inet_pton(AF_INET, SERVER_ADDR, &server_a.sin_addr);
+
+	connect(server_s, reinterpret_cast<sockaddr *>(& server_a), sizeof(server_a));
+
+	while (true) {
+		char buf[BUFSIZE];
+
+		std::cout << "Enter Message: ";
+		std::cin.getline(buf, BUFSIZE);
+
+		WSABUF wsabuf[1];
+		wsabuf[0].buf = buf;
+		wsabuf[0].len = static_cast<int>(strlen(buf)) + 1;
+
+		if (wsabuf[0].len == 1)
+			break;
+
+		DWORD sent_size;
+		WSASend(server_s, wsabuf, 1, &sent_size, 0, 0, 0);
+
+		wsabuf[0].len = BUFSIZE;
+		DWORD recv_size;
+		DWORD recv_flag = 0;
+		WSARecv(server_s, wsabuf, 1, &recv_size, &recv_flag, nullptr, nullptr);
+
+		for (DWORD i = 0; i < recv_size; ++i)
+			std::cout << buf[i];
+		std::cout << std::endl;
+	}
+	closesocket(server_s);
+	WSACleanup();
+}
+
+GLvoid client(int argc, char** argv)
 {
 	// 윈도우 생성
 	glutInit(&argc, argv);
