@@ -5,12 +5,13 @@
 #pragma comment (lib, "WS2_32.LIB")
 
 constexpr short PORT = 4000;
-constexpr char SERVER_ADDR[] = "127.0.0.1";
+//constexpr char SERVER_ADDR[] = "127.0.0.1";
 constexpr int BUFSIZE = 256;
 
 // 서버 
 GLvoid initServer();
 GLvoid client(int argc, char** argv);
+char SERVER_ADDR[10];
 
 SOCKET server_s;
 
@@ -86,9 +87,8 @@ GLvoid initServer()
 	}
 
 	// SOCK ADDR 생성
-	//char SERVER_ADDR[10];
-	//std::cout << "Enter ADDR: ";
-	//std::cin.getline(SERVER_ADDR, 10);
+	std::cout << "Enter ADDR: ";
+	std::cin.getline(SERVER_ADDR, 10);
 
 	SOCKADDR_IN server_a;
 

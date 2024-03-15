@@ -9,6 +9,9 @@ pch.h에 헤더파일을 확인해 주세요!
 
 https://github.com/UihwanLee/ComputerGraphicsOpenGL
 
+<사용시>
+SERVER_ADDR = 127.0.0.1 입력 후 사용
+
 <조작법>
 w: 체스말 위로 이동
 s: 체스말 아래로 이동
