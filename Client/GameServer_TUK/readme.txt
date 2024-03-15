@@ -13,6 +13,7 @@ https://github.com/UihwanLee/ComputerGraphicsOpenGL
 SERVER_ADDR = 127.0.0.1 입력 후 사용
 
 <조작법>
+p: 프로그램 종료 및 서버 접속 해제
 w: 체스말 위로 이동
 s: 체스말 아래로 이동
 a: 체스말 완쪽으로 이동

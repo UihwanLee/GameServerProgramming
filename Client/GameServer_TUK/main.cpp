@@ -87,7 +87,8 @@ GLvoid initServer()
 	}
 
 	// SOCK ADDR 생성
-	std::cout << "Enter ADDR: ";
+	std::cout << "[Recommend]: 127.0.0.1" << std::endl;
+	std::cout << "서버와 연결할 IP 주소를 입력하세요: ";
 	std::cin.getline(SERVER_ADDR, 10);
 
 	SOCKADDR_IN server_a;
