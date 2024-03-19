@@ -323,163 +323,59 @@ void keyBoard(unsigned char key, int x, int y)
 	}
 }
 
+GLvoid movePlayer(char type)
+{
+	move_packet p;
+	p.size = sizeof(move_packet);
+	p.type = type;
+	p.idx = m_ObjectManager->getCurrentIDX();
+	p.pos = glm::vec3(0.0f, 0.0f, 0.0f);
+
+	char buf[1];
+	buf[0] = ' ';
+
+	WSABUF buffer;
+	buffer.len = sizeof(move_packet);
+	buffer.buf = reinterpret_cast<CHAR*>(&p);
+
+	DWORD sent_size;
+	int result = WSASend(server_s, &buffer, 1, &sent_size, 0, 0, 0);
+
+	if (result == SOCKET_ERROR) {
+		std::cerr << "Failed to send data. Error code: " << WSAGetLastError() << std::endl;
+		closesocket(server_s);
+		WSACleanup();
+		return;
+	}
+
+	DWORD recv_size;
+	DWORD recv_flag = 0;
+	WSARecv(server_s, &buffer, 1, &recv_size, &recv_flag, nullptr, nullptr);
+
+	if (p.pos != glm::vec3(0.0f, 0.0f, 0.0f))
+	{
+		// 서버에서 받은 Position으로 말 이동
+		std::cout << "[Client] 말 vec3(" << p.pos.x << ", " << p.pos.y << ", " << p.pos.z << ")로 이동!" << std::endl;
+		m_ObjectManager->setPosition(playerIDX, p.pos);
+		m_ObjectManager->setCurrentIDX(p.idx);
+	}
+}
+
 void specialKeyBoard(int key, int x, int y)
 {
 	// 스페설 키보드 입력 처리
 	switch (key) {
 	case GLUT_KEY_LEFT:
-		{
-			move_packet p;
-			p.size = sizeof(move_packet);
-			p.type = '1';
-			p.idx = m_ObjectManager->getCurrentIDX();
-			p.pos = glm::vec3(0.0f, 0.0f, 0.0f);
-
-			char buf[1];
-			buf[0] = ' ';
-
-			WSABUF buffer;
-			buffer.len = sizeof(move_packet);
-			buffer.buf = reinterpret_cast<CHAR*>(&p);
-
-			DWORD sent_size;
-			int result = WSASend(server_s, &buffer, 1, &sent_size, 0, 0, 0);
-
-			if (result == SOCKET_ERROR) {
-				std::cerr << "Failed to send data. Error code: " << WSAGetLastError() << std::endl;
-				closesocket(server_s);
-				WSACleanup();
-				return;
-			}
-
-			DWORD recv_size;
-			DWORD recv_flag = 0;
-			WSARecv(server_s, &buffer, 1, &recv_size, &recv_flag, nullptr, nullptr);
-
-			if (p.pos != glm::vec3(0.0f, 0.0f, 0.0f))
-			{
-				// 서버에서 받은 Position으로 말 이동
-				std::cout << "[Client] 말 vec3(" << p.pos.x << ", " << p.pos.y << ", " << p.pos.z << ")로 이동!" << std::endl;
-				m_ObjectManager->setPosition(playerIDX, p.pos);
-				m_ObjectManager->setCurrentIDX(p.idx);
-			}
-		}
+		movePlayer('1');
 		break;
 	case GLUT_KEY_RIGHT:
-		{
-			move_packet p;
-			p.size = sizeof(move_packet);
-			p.type = '2';
-			p.idx = m_ObjectManager->getCurrentIDX();
-			p.pos = glm::vec3(0.0f, 0.0f, 0.0f);
-
-			char buf[1];
-			buf[0] = ' ';
-
-			WSABUF buffer;
-			buffer.len = sizeof(move_packet);
-			buffer.buf = reinterpret_cast<CHAR*>(&p);
-
-			DWORD sent_size;
-			int result = WSASend(server_s, &buffer, 1, &sent_size, 0, 0, 0);
-
-			if (result == SOCKET_ERROR) {
-				std::cerr << "Failed to send data. Error code: " << WSAGetLastError() << std::endl;
-				closesocket(server_s);
-				WSACleanup();
-				return;
-			}
-
-			DWORD recv_size;
-			DWORD recv_flag = 0;
-			WSARecv(server_s, &buffer, 1, &recv_size, &recv_flag, nullptr, nullptr);
-
-			if (p.pos != glm::vec3(0.0f, 0.0f, 0.0f))
-			{
-				// 서버에서 받은 Position으로 말 이동
-				std::cout << "[Client] 말 vec3(" << p.pos.x << ", " << p.pos.y << ", " << p.pos.z << ")로 이동!" << std::endl;
-				m_ObjectManager->setPosition(playerIDX, p.pos);
-				m_ObjectManager->setCurrentIDX(p.idx);
-			}
-		}
+		movePlayer('2');
 		break;
 	case GLUT_KEY_UP:
-		{
-			move_packet p;
-			p.size = sizeof(move_packet);
-			p.type = '3';
-			p.idx = m_ObjectManager->getCurrentIDX();
-			p.pos = glm::vec3(0.0f, 0.0f, 0.0f);
-
-			char buf[1];
-			buf[0] = ' ';
-
-			WSABUF buffer;
-			buffer.len = sizeof(move_packet);
-			buffer.buf = reinterpret_cast<CHAR*>(&p);
-
-			DWORD sent_size;
-			int result = WSASend(server_s, &buffer, 1, &sent_size, 0, 0, 0);
-
-			if (result == SOCKET_ERROR) {
-				std::cerr << "Failed to send data. Error code: " << WSAGetLastError() << std::endl;
-				closesocket(server_s);
-				WSACleanup();
-				return;
-			}
-
-			DWORD recv_size;
-			DWORD recv_flag = 0;
-			WSARecv(server_s, &buffer, 1, &recv_size, &recv_flag, nullptr, nullptr);
-
-			if (p.pos != glm::vec3(0.0f, 0.0f, 0.0f))
-			{
-				// 서버에서 받은 Position으로 말 이동
-				std::cout << "[Client] 말 vec3(" << p.pos.x << ", " << p.pos.y << ", " << p.pos.z << ")로 이동!" << std::endl;
-				m_ObjectManager->setPosition(playerIDX, p.pos);
-				m_ObjectManager->setCurrentIDX(p.idx);
-			}
-		}
+		movePlayer('3');
 		break;
 	case GLUT_KEY_DOWN:
-		{
-			{
-				move_packet p;
-				p.size = sizeof(move_packet);
-				p.type = '4';
-				p.idx = m_ObjectManager->getCurrentIDX();
-				p.pos = glm::vec3(0.0f, 0.0f, 0.0f);
-
-				char buf[1];
-				buf[0] = ' ';
-
-				WSABUF buffer;
-				buffer.len = sizeof(move_packet);
-				buffer.buf = reinterpret_cast<CHAR*>(&p);
-
-				DWORD sent_size;
-				int result = WSASend(server_s, &buffer, 1, &sent_size, 0, 0, 0);
-
-				if (result == SOCKET_ERROR) {
-					std::cerr << "Failed to send data. Error code: " << WSAGetLastError() << std::endl;
-					closesocket(server_s);
-					WSACleanup();
-					return;
-				}
-
-				DWORD recv_size;
-				DWORD recv_flag = 0;
-				WSARecv(server_s, &buffer, 1, &recv_size, &recv_flag, nullptr, nullptr);
-				
-				if (p.pos != glm::vec3(0.0f, 0.0f, 0.0f))
-				{
-					// 서버에서 받은 Position으로 말 이동
-					std::cout << "[Client] 말 vec3(" << p.pos.x << ", " << p.pos.y << ", " << p.pos.z << ")로 이동!" << std::endl;
-					m_ObjectManager->setPosition(playerIDX, p.pos);
-					m_ObjectManager->setCurrentIDX(p.idx);
-				}
-			}
-		}
+		movePlayer('4');
 		break;
 	}
 	glutPostRedisplay();
