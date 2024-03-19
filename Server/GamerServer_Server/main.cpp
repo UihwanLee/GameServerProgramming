@@ -13,6 +13,8 @@ struct move_packet {
 };
 #pragma pack (pop)
 
+GLvoid Non_blocking();
+
 GLvoid goLeft(move_packet& receivedPacket);
 GLvoid goRight(move_packet &receivedPacket);
 GLvoid goUp(move_packet& receivedPacket);
@@ -34,6 +36,12 @@ void print_error(const char* msg, int err_no)
 
 int main(void)
 {
+	Non_blocking();
+	return 0;
+}
+
+GLvoid Non_blocking()
+{
 	std::wcout.imbue(std::locale("korean"));
 
 	// window 네트워크 프로그래밍 시 옛날에 만든 프로그램과의 호환성을 위해 필요
@@ -46,7 +54,7 @@ int main(void)
 	{
 		std::cerr << "Failed to create server socket." << std::endl;
 		WSACleanup();
-		return 0;
+		return;
 	}
 
 	std::cout << "[Server] 서버 클라이언트 접속 대기" << std::endl;
@@ -64,7 +72,7 @@ int main(void)
 		std::cerr << "Failed to bind server socket." << std::endl;
 		closesocket(server_s);
 		WSACleanup();
-		return 0;
+		return;
 	}
 
 	// 연결 대기
@@ -73,7 +81,7 @@ int main(void)
 		std::cerr << "Failed to listen on server socket.\n";
 		closesocket(server_s);
 		WSACleanup();
-		return 0;
+		return;
 	}
 
 	int addr_size = sizeof(server_a);
@@ -84,7 +92,7 @@ int main(void)
 	{
 		std::cerr << "Failed to create client socket." << std::endl;
 		WSACleanup();
-		return 0;
+		return;
 	}
 
 	std::cout << "[Server] 서버 클라이언트 접속 성공" << std::endl;
