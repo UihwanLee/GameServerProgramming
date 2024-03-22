@@ -8,6 +8,8 @@ class ObjectManager
 {
 public:
 	vector<Object*>	m_ObjectList;
+	vector<int> m_playerIDList;
+	int serverID;
 	int currentIDX;
 
 public:
@@ -36,4 +38,10 @@ public:
 	mat4 transformModel(int idx);
 	void setCurrentIDX(int idx);
 	int getCurrentIDX();
+
+public:
+	void setServerID(int id);
+	int getServerID();
+	void addPlayer(int idx);
+	int getMyPlayer();
 };

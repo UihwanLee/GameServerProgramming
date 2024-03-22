@@ -9,15 +9,23 @@ constexpr int BUFSIZE = 256;
 
 // 서버 
 GLvoid initServer();
-GLvoid initOverlappedIO();
 GLvoid client(int argc, char** argv);
-char SERVER_ADDR[10];
+constexpr char SERVER_ADDR[] = "127.0.0.1";
+
+WSABUF wsabuf;
+WSAOVERLAPPED wsaover;
+bool bshutdown = false;
 
 void CALLBACK send_callback(DWORD error, DWORD sent_size,
 	LPWSAOVERLAPPED pwsaover, DWORD sendflag);
 
 void CALLBACK recv_callback(DWORD error, DWORD recv_size,
 	LPWSAOVERLAPPED pwsaover, DWORD sendflag);
+
+// 클라이언트 행동 함수
+void check_packet();
+void create_player();
+void move_player();
 
 SOCKET server_s;
 char buf[BUFSIZE];
@@ -27,6 +35,7 @@ GLvoid render(GLvoid);
 GLvoid reshape(int w, int h);
 GLvoid keyBoard(unsigned char key, int x, int y);
 GLvoid specialKeyBoard(int key, int x, int y);
+GLvoid update(int value);
 
 // Texture
 unsigned int texture;
@@ -48,7 +57,7 @@ GLvoid initObjects();
 
 // INDEX
 int idx = -1;
-int playerIDX = -1;
+int playerID = -1;
 
 // 카메라
 mat4 camera = mat4(1.0f);
@@ -64,63 +73,79 @@ ObjectManager* m_ObjectManager = new ObjectManager();
 #pragma pack (push, 1)
 struct move_packet {
 	short		size;
-	char		type;
-	int			idx;
+	int			type;
+	int			serverID;
+	int			playerPosIDX;
 	glm::vec3	pos;
 };
 #pragma pack (pop)
 
 void main(int argc, char** argv)
 {
-	initOverlappedIO();
-	//initServer();
-	//client(argc, argv);
+	initServer();
+	client(argc, argv);
 }
 
-WSABUF wsabuf[1];
-WSAOVERLAPPED wsaover;
-bool bshutdown = false;
+void send_move_packet(char type);
 
-void read_n_send();
+move_packet receivedPacket;
 
-void read_n_send()
+GLvoid update(int value)
 {
-	std::cout << "Enter Message: ";
-	std::cin.getline(buf, BUFSIZE - 1);
+	// 30 밀리초 마다 수행
+	SleepEx(0, TRUE);
+	glutPostRedisplay();
+	glutTimerFunc(10, update, 1);
+}
 
-	wsabuf[0].buf = buf;
-	wsabuf[0].len = static_cast<int>(strlen(buf)) + 1;
 
-	if (wsabuf[0].len == 1)
-	{
+void send_move_packet(int type)
+{
+	receivedPacket.size = sizeof(move_packet);
+	receivedPacket.type = type;
+	receivedPacket.serverID = m_ObjectManager->getServerID();
+	receivedPacket.playerPosIDX = m_ObjectManager->getCurrentIDX();
+	receivedPacket.pos = glm::vec3(0.0f, 0.0f, 0.0f);
+
+	wsabuf.len = sizeof(move_packet);
+	wsabuf.buf = reinterpret_cast<CHAR*>(&receivedPacket);
+	if (wsabuf.len == 1) {
 		bshutdown = true;
 		return;
 	}
-
 	ZeroMemory(&wsaover, sizeof(wsaover));
-	WSASend(server_s, wsabuf, 1, nullptr, 0, &wsaover, send_callback);
+	WSASend(server_s, &wsabuf, 1, nullptr, 0, &wsaover, send_callback);
 }
 
-void CALLBACK recv_callback(DWORD error, DWORD recv_size,
+void CALLBACK recv_callback(DWORD err, DWORD recv_size,
 	LPWSAOVERLAPPED pwsaover, DWORD sendflag)
 {
-	for (DWORD i = 0; i < recv_size; ++i)
-		std::cout << buf[i];
-	std::cout << std::endl;
-	read_n_send();
+	//std::cout << "Recevice: " << receivedPacket.idx << std::endl;
+	std::cout << "[Client] 서버로 Packet을 보냄" << std::endl;
 }
 
-void CALLBACK send_callback(DWORD error, DWORD sent_size, 
+void CALLBACK send_callback(DWORD err, DWORD sent_size,
 	LPWSAOVERLAPPED pwsaover, DWORD sendflag)
 {
-	wsabuf[0].len = BUFSIZE;
+	wsabuf.len = sizeof(move_packet);
 	DWORD recv_flag = 0;
 	ZeroMemory(pwsaover, sizeof(*pwsaover));
-	WSARecv(server_s, wsabuf, 1, nullptr, &recv_flag, pwsaover, recv_callback);
+	WSARecv(server_s, &wsabuf, 1, nullptr, &recv_flag, pwsaover, recv_callback);
+
+	// 서버에서 받은 데이터로 로그 표시
+	std::cout << "[서버로 부터 받은 type]:" << receivedPacket.type << std::endl;
+	std::cout << "[서버로 부터 받은 서버 ID]:" << receivedPacket.serverID << std::endl;
+	std::cout << "[서버로 부터 받은 playerPosidx]:" << receivedPacket.playerPosIDX << std::endl;
+	std::cout << "[서버로 부터 받은 pos]: (" << receivedPacket.pos.x << ", " << receivedPacket.pos.y << ", " << receivedPacket.pos.z << ")" << std::endl;
+
+	// 서버에서 받은 데이터로 수행하는 함수 판단
+	check_packet();
 }
 
-GLvoid initOverlappedIO()
+GLvoid initServer()
 {
+	// Overlapped I/O callback으로 서버 연결
+
 	std::wcout.imbue(std::locale("korean"));
 
 	// window 네트워크 프로그래밍 시 옛날에 만든 프로그램과의 호환성을 위해 필요
@@ -128,50 +153,10 @@ GLvoid initOverlappedIO()
 	WSAStartup(MAKEWORD(2, 0), &WSAData);
 
 	// SOCKET 생성
-	SOCKET server_s = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, nullptr, 0, WSA_FLAG_OVERLAPPED);
+	server_s = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, nullptr, 0, WSA_FLAG_OVERLAPPED);
 
 	// SOCK ADDR 생성
 	SOCKADDR_IN server_a;
-
-	server_a.sin_family = AF_INET;
-	server_a.sin_port = htons(PORT);
-	inet_pton(AF_INET, "127.0.0.1", &server_a.sin_addr);
-
-	WSAConnect(server_s, reinterpret_cast<sockaddr*>(&server_a), sizeof(server_a), 0, 0, 0, 0);
-
-	read_n_send();
-
-	while (false == bshutdown) {
-		SleepEx(0, TRUE);
-	}
-	closesocket(server_s);
-	WSACleanup();
-}
-
-GLvoid initServer()
-{
-	std::wcout.imbue(locale("korean"));
-
-	// window 네트워크 프로그래밍 시 옛날에 만든 프로그램과의 호환성을 위해 필요
-	WSADATA WSAData;
-	WSAStartup(MAKEWORD(2, 0), &WSAData);
-
-	// SOCKET 생성
-	server_s = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, nullptr, 0, 0);
-	if (server_s == INVALID_SOCKET)
-	{
-		std::cerr << "Failed to create socket." << std::endl;
-		WSACleanup();
-		return;
-	}
-
-	// SOCK ADDR 생성
-	std::cout << "[Recommend]: 127.0.0.1" << std::endl;
-	std::cout << "서버와 연결할 IP 주소를 입력하세요: ";
-	std::cin.getline(SERVER_ADDR, 10);
-
-	SOCKADDR_IN server_a;
-
 	server_a.sin_family = AF_INET;
 	server_a.sin_port = htons(PORT);
 	inet_pton(AF_INET, SERVER_ADDR, &server_a.sin_addr);
@@ -185,7 +170,6 @@ GLvoid initServer()
 	}
 
 	std::cout << "[Client] 클라이언트 서버 접속 성공" << std::endl;
-	std::cout << "[Client] 명령어 q: 서버 접속 종료" << std::endl;
 }
 
 GLvoid client(int argc, char** argv)
@@ -205,6 +189,9 @@ GLvoid client(int argc, char** argv)
 	createShaderProgram();
 
 	glutDisplayFunc(render);
+
+	// Update
+	glutTimerFunc(10, update, 1);
 
 	// 키보드
 	glutKeyboardFunc(keyBoard);
@@ -237,8 +224,8 @@ GLvoid initObjects()
 	// 체스판 생성
 	m_ObjectManager->creatBoard(&idx);
 
-	// 플레이어 생성
-	playerIDX = m_ObjectManager->creatPlayer(&idx);
+	// 서버에 플레이어 생성 요청
+	send_move_packet(0);
 
 	// 카메라 세팅
 	camera = glm::translate(camera, glm::vec3(0.0f, 0.0f, -10.0f));
@@ -316,6 +303,7 @@ void createShaderProgram()
 
 GLvoid render()
 {
+
 	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
 
@@ -402,42 +390,53 @@ void keyBoard(unsigned char key, int x, int y)
 	}
 }
 
-GLvoid movePlayer(char type)
+void check_packet()
 {
-	move_packet p;
-	p.size = sizeof(move_packet);
-	p.type = type;
-	p.idx = m_ObjectManager->getCurrentIDX();
-	p.pos = glm::vec3(0.0f, 0.0f, 0.0f);
+	// 서버에서 받아온 packet의 type을 확인하여 적절한 함수를 실행
+	if (receivedPacket.type == 0)
+	{
+		create_player();
+	}
+	else if (receivedPacket.type >= 1 && receivedPacket.type <= 3)
+	{
+		move_player();
+	}
+}
 
-	char buf[1];
-	buf[0] = ' ';
+void create_player()
+{
+	// 초기 플레이어를 생성한다.
+	m_ObjectManager->setCurrentIDX(receivedPacket.playerPosIDX);
+	playerID = m_ObjectManager->creatPlayer(&idx);
 
-	WSABUF buffer;
-	buffer.len = sizeof(move_packet);
-	buffer.buf = reinterpret_cast<CHAR*>(&p);
+	// 받은 플레이어 ID 값을 playerList에 추가한다.
+	m_ObjectManager->addPlayer(playerID);
 
-	DWORD sent_size;
-	int result = WSASend(server_s, &buffer, 1, &sent_size, 0, 0, 0);
+	// 서버로부터 받은 서버 아이디를 세팅한다
+	m_ObjectManager->setServerID(receivedPacket.serverID);
 
-	if (result == SOCKET_ERROR) {
-		std::cerr << "Failed to send data. Error code: " << WSAGetLastError() << std::endl;
-		closesocket(server_s);
-		WSACleanup();
+	std::cout << "[Client]: 서버로 부터 요청받아 자신의 플레이 말 생성!" << std::endl;
+}
+
+void create_other_player()
+{
+
+}
+
+void move_player()
+{
+	// 플레이어의 말을 움직이는 함수
+
+	if (receivedPacket.pos == glm::vec3(0.0f, 0.0f, 0.0f))
+	{
+		std::cout << "ERROR: POS가 0,0,0 임!" << std::endl;
 		return;
 	}
 
-	DWORD recv_size;
-	DWORD recv_flag = 0;
-	WSARecv(server_s, &buffer, 1, &recv_size, &recv_flag, nullptr, nullptr);
-
-	if (p.pos != glm::vec3(0.0f, 0.0f, 0.0f))
-	{
-		// 서버에서 받은 Position으로 말 이동
-		std::cout << "[Client] 말 vec3(" << p.pos.x << ", " << p.pos.y << ", " << p.pos.z << ")로 이동!" << std::endl;
-		m_ObjectManager->setPosition(playerIDX, p.pos);
-		m_ObjectManager->setCurrentIDX(p.idx);
-	}
+	// 서버에서 받은 Position으로 말 이동
+	std::cout << "[Client] 말 vec3(" << receivedPacket.pos.x << ", " << receivedPacket.pos.y << ", " << receivedPacket.pos.z << ")로 이동!" << std::endl;
+	m_ObjectManager->setPosition(m_ObjectManager->getMyPlayer(), receivedPacket.pos);
+	m_ObjectManager->setCurrentIDX(receivedPacket.playerPosIDX);
 }
 
 void specialKeyBoard(int key, int x, int y)
@@ -445,16 +444,16 @@ void specialKeyBoard(int key, int x, int y)
 	// 스페설 키보드 입력 처리
 	switch (key) {
 	case GLUT_KEY_LEFT:
-		movePlayer('1');
+		send_move_packet(1);
 		break;
 	case GLUT_KEY_RIGHT:
-		movePlayer('2');
+		send_move_packet(2);
 		break;
 	case GLUT_KEY_UP:
-		movePlayer('3');
+		send_move_packet(3);
 		break;
 	case GLUT_KEY_DOWN:
-		movePlayer('4');
+		send_move_packet(4);
 		break;
 	}
 	glutPostRedisplay();

@@ -2,7 +2,8 @@
 
 ObjectManager::ObjectManager()
 {
-	currentIDX = 35;
+	serverID = 0;
+	currentIDX = 0;
 }
 
 ObjectManager::~ObjectManager()
@@ -198,4 +199,27 @@ void ObjectManager::setCurrentIDX(int idx)
 int ObjectManager::getCurrentIDX()
 {
 	return currentIDX;
+}
+
+void ObjectManager::setServerID(int id)
+{
+	serverID = id;
+}
+
+int ObjectManager::getServerID()
+{
+	return serverID;
+}
+
+void ObjectManager::addPlayer(int idx)
+{
+	m_playerIDList.emplace_back(idx);
+}
+
+int ObjectManager::getMyPlayer()
+{
+	if (m_playerIDList.empty()) return 0;
+
+	// 항상 초기 생성되는 말이 자기 자신이므로 0번째 인덱스 리턴
+	return m_playerIDList[0];
 }
