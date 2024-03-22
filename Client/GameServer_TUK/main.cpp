@@ -5,15 +5,22 @@
 #pragma comment (lib, "WS2_32.LIB")
 
 constexpr short PORT = 4000;
-//constexpr char SERVER_ADDR[] = "127.0.0.1";
 constexpr int BUFSIZE = 256;
 
 // 서버 
 GLvoid initServer();
+GLvoid initOverlappedIO();
 GLvoid client(int argc, char** argv);
 char SERVER_ADDR[10];
 
+void CALLBACK send_callback(DWORD error, DWORD sent_size,
+	LPWSAOVERLAPPED pwsaover, DWORD sendflag);
+
+void CALLBACK recv_callback(DWORD error, DWORD recv_size,
+	LPWSAOVERLAPPED pwsaover, DWORD sendflag);
+
 SOCKET server_s;
+char buf[BUFSIZE];
 
 // 콜벡 함수
 GLvoid render(GLvoid);
@@ -65,8 +72,80 @@ struct move_packet {
 
 void main(int argc, char** argv)
 {
-	initServer();
-	client(argc, argv);
+	initOverlappedIO();
+	//initServer();
+	//client(argc, argv);
+}
+
+WSABUF wsabuf[1];
+WSAOVERLAPPED wsaover;
+bool bshutdown = false;
+
+void read_n_send();
+
+void read_n_send()
+{
+	std::cout << "Enter Message: ";
+	std::cin.getline(buf, BUFSIZE - 1);
+
+	wsabuf[0].buf = buf;
+	wsabuf[0].len = static_cast<int>(strlen(buf)) + 1;
+
+	if (wsabuf[0].len == 1)
+	{
+		bshutdown = true;
+		return;
+	}
+
+	ZeroMemory(&wsaover, sizeof(wsaover));
+	WSASend(server_s, wsabuf, 1, nullptr, 0, &wsaover, send_callback);
+}
+
+void CALLBACK recv_callback(DWORD error, DWORD recv_size,
+	LPWSAOVERLAPPED pwsaover, DWORD sendflag)
+{
+	for (DWORD i = 0; i < recv_size; ++i)
+		std::cout << buf[i];
+	std::cout << std::endl;
+	read_n_send();
+}
+
+void CALLBACK send_callback(DWORD error, DWORD sent_size, 
+	LPWSAOVERLAPPED pwsaover, DWORD sendflag)
+{
+	wsabuf[0].len = BUFSIZE;
+	DWORD recv_flag = 0;
+	ZeroMemory(pwsaover, sizeof(*pwsaover));
+	WSARecv(server_s, wsabuf, 1, nullptr, &recv_flag, pwsaover, recv_callback);
+}
+
+GLvoid initOverlappedIO()
+{
+	std::wcout.imbue(std::locale("korean"));
+
+	// window 네트워크 프로그래밍 시 옛날에 만든 프로그램과의 호환성을 위해 필요
+	WSADATA WSAData;
+	WSAStartup(MAKEWORD(2, 0), &WSAData);
+
+	// SOCKET 생성
+	SOCKET server_s = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, nullptr, 0, WSA_FLAG_OVERLAPPED);
+
+	// SOCK ADDR 생성
+	SOCKADDR_IN server_a;
+
+	server_a.sin_family = AF_INET;
+	server_a.sin_port = htons(PORT);
+	inet_pton(AF_INET, "127.0.0.1", &server_a.sin_addr);
+
+	WSAConnect(server_s, reinterpret_cast<sockaddr*>(&server_a), sizeof(server_a), 0, 0, 0, 0);
+
+	read_n_send();
+
+	while (false == bshutdown) {
+		SleepEx(0, TRUE);
+	}
+	closesocket(server_s);
+	WSACleanup();
 }
 
 GLvoid initServer()
