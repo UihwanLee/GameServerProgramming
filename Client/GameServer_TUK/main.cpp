@@ -26,6 +26,7 @@ void CALLBACK recv_callback(DWORD error, DWORD recv_size,
 void check_packet();
 void create_player();
 void move_player();
+void create_other_player();
 
 SOCKET server_s;
 char buf[BUFSIZE];
@@ -71,11 +72,12 @@ void drawObjects(int idx);
 ObjectManager* m_ObjectManager = new ObjectManager();
 
 #pragma pack (push, 1)
-struct move_packet {
+struct packet {
 	short		size;
 	int			type;
 	int			serverID;
 	int			playerPosIDX;
+	int			otherSeverID;
 	glm::vec3	pos;
 };
 #pragma pack (pop)
@@ -86,9 +88,9 @@ void main(int argc, char** argv)
 	client(argc, argv);
 }
 
-void send_move_packet(char type);
+void send_move_packet(int type);
 
-move_packet receivedPacket;
+packet receivedPacket;
 
 GLvoid update(int value)
 {
@@ -101,13 +103,13 @@ GLvoid update(int value)
 
 void send_move_packet(int type)
 {
-	receivedPacket.size = sizeof(move_packet);
+	receivedPacket.size = sizeof(packet);
 	receivedPacket.type = type;
 	receivedPacket.serverID = m_ObjectManager->getServerID();
 	receivedPacket.playerPosIDX = m_ObjectManager->getCurrentIDX();
 	receivedPacket.pos = glm::vec3(0.0f, 0.0f, 0.0f);
 
-	wsabuf.len = sizeof(move_packet);
+	wsabuf.len = sizeof(packet);
 	wsabuf.buf = reinterpret_cast<CHAR*>(&receivedPacket);
 	if (wsabuf.len == 1) {
 		bshutdown = true;
@@ -121,22 +123,18 @@ void CALLBACK recv_callback(DWORD err, DWORD recv_size,
 	LPWSAOVERLAPPED pwsaover, DWORD sendflag)
 {
 	//std::cout << "Recevice: " << receivedPacket.idx << std::endl;
-	std::cout << "[Client] 서버로 Packet을 보냄" << std::endl;
+	//std::cout << "[Client] 서버로 Packet을 보냄" << std::endl;
 }
 
 void CALLBACK send_callback(DWORD err, DWORD sent_size,
 	LPWSAOVERLAPPED pwsaover, DWORD sendflag)
 {
-	wsabuf.len = sizeof(move_packet);
+	wsabuf.len = sizeof(packet);
 	DWORD recv_flag = 0;
 	ZeroMemory(pwsaover, sizeof(*pwsaover));
 	WSARecv(server_s, &wsabuf, 1, nullptr, &recv_flag, pwsaover, recv_callback);
 
-	// 서버에서 받은 데이터로 로그 표시
-	std::cout << "[서버로 부터 받은 type]:" << receivedPacket.type << std::endl;
-	std::cout << "[서버로 부터 받은 서버 ID]:" << receivedPacket.serverID << std::endl;
-	std::cout << "[서버로 부터 받은 playerPosidx]:" << receivedPacket.playerPosIDX << std::endl;
-	std::cout << "[서버로 부터 받은 pos]: (" << receivedPacket.pos.x << ", " << receivedPacket.pos.y << ", " << receivedPacket.pos.z << ")" << std::endl;
+	std::cout << "[Client] recevicepacket tpye: " << receivedPacket.type << "번" << std::endl;
 
 	// 서버에서 받은 데이터로 수행하는 함수 판단
 	check_packet();
@@ -395,16 +393,29 @@ void check_packet()
 	// 서버에서 받아온 packet의 type을 확인하여 적절한 함수를 실행
 	if (receivedPacket.type == 0)
 	{
+		// 이미 접속된 플레이어 처리
+		if (receivedPacket.serverID > 0)
+		{
+			for (int i = 0; i < receivedPacket.serverID; i++)
+				create_other_player();
+		}
+
 		create_player();
 	}
-	else if (receivedPacket.type >= 1 && receivedPacket.type <= 3)
+	else if (receivedPacket.type >= 1 && receivedPacket.type <= 4)
 	{
 		move_player();
+	}
+	else if (receivedPacket.type == 5)
+	{
+		create_other_player();
 	}
 }
 
 void create_player()
 {
+	// 자신의 플레이어를 생성하기 전 서버에 저장되어 있는 다른 플레이어 생성
+
 	// 초기 플레이어를 생성한다.
 	m_ObjectManager->setCurrentIDX(receivedPacket.playerPosIDX);
 	playerID = m_ObjectManager->creatPlayer(&idx);
@@ -415,12 +426,19 @@ void create_player()
 	// 서버로부터 받은 서버 아이디를 세팅한다
 	m_ObjectManager->setServerID(receivedPacket.serverID);
 
-	std::cout << "[Client]: 서버로 부터 요청받아 자신의 플레이 말 생성!" << std::endl;
+	std::cout << "[Client" << m_ObjectManager->getServerID() << "]: 서버로 부터 요청받아 자신의 플레이 말 생성!" << std::endl;
 }
 
 void create_other_player()
 {
+	std::cout << "[Client" << m_ObjectManager->getServerID() << "]: 서버로 부터 요청받아 다른 플레이 말 생성!" << std::endl;
 
+	// 새로 들어온 플레이어 생성
+	m_ObjectManager->setCurrentIDX(receivedPacket.playerPosIDX);
+	playerID = m_ObjectManager->creatPlayer(&idx);
+
+	// 받은 플레이어 ID 값을 playerList에 추가한다.
+	m_ObjectManager->addPlayer(playerID);
 }
 
 void move_player()
@@ -434,7 +452,6 @@ void move_player()
 	}
 
 	// 서버에서 받은 Position으로 말 이동
-	std::cout << "[Client] 말 vec3(" << receivedPacket.pos.x << ", " << receivedPacket.pos.y << ", " << receivedPacket.pos.z << ")로 이동!" << std::endl;
 	m_ObjectManager->setPosition(m_ObjectManager->getMyPlayer(), receivedPacket.pos);
 	m_ObjectManager->setCurrentIDX(receivedPacket.playerPosIDX);
 }

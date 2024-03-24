@@ -221,5 +221,5 @@ int ObjectManager::getMyPlayer()
 	if (m_playerIDList.empty()) return 0;
 
 	// 항상 초기 생성되는 말이 자기 자신이므로 0번째 인덱스 리턴
-	return m_playerIDList[0];
+	return m_playerIDList[serverID];
 }

@@ -1,6 +1,5 @@
 #include "pch.h"
 #include "Figure.h"
-#include <unordered_map>
 
 constexpr short PORT = 4000;
 constexpr char SERVER_ADDR[] = "127.0.0.1";
@@ -11,27 +10,30 @@ void print_error(const char* msg, int err_no);
 void CALLBACK recv_callback(DWORD err, DWORD recv_size, LPWSAOVERLAPPED pover, DWORD recv_flag);
 void CALLBACK send_callback(DWORD err, DWORD sent_size, LPWSAOVERLAPPED pover, DWORD recv_flag);
 
+void send_other_people(int id);
+
 #pragma pack (push, 1)
-struct move_packet {
+struct packet {
 	short		size;
 	int			type;
 	int			serverID;
 	int			playerPosIDX;
+	int			otherSeverID;
 	glm::vec3	pos;
 };
 #pragma pack (pop)
 
 GLvoid OverlappedIO();
 
-std::unordered_map<LPWSAOVERLAPPED, int> g_seesion_map;
-
 int startPlayerPosIDX = 35;
 int serverID = 0;
 std::vector<int> playerList;
 
+std::unordered_map<LPWSAOVERLAPPED, int> g_seesion_map;
+
 class SESSION {
 public:
-	move_packet receivedPacket;
+	packet receivedPacket;
 	char buf[BUFSIZE];
 	WSABUF wsabuf;
 	SOCKET client_s;
@@ -48,7 +50,7 @@ public:
 
 	void do_recv()
 	{
-		wsabuf.len = sizeof(move_packet);
+		wsabuf.len = sizeof(packet);
 		wsabuf.buf = reinterpret_cast<CHAR*>(&receivedPacket);
 		DWORD recv_size;
 		DWORD recv_flag = 0;
@@ -65,7 +67,7 @@ public:
 	void check_type()
 	{
 		if (receivedPacket.type == 0)									createPlayer();
-		else if (receivedPacket.type >= 1 && receivedPacket.type <= 4)	move_player();
+		else if (receivedPacket.type >= 1 && receivedPacket.type <= 4)	move_player(receivedPacket.type);
 	}
 
 	void createPlayer()
@@ -78,10 +80,32 @@ public:
 		playerList.emplace_back(serverID);
 		receivedPacket.serverID = serverID++;
 
+		receivedPacket.otherSeverID = 0;
+
+		wsabuf.len = sizeof(packet);
+		wsabuf.buf = reinterpret_cast<CHAR*>(&receivedPacket);
+
 		WSASend(client_s, &wsabuf, 1, nullptr, 0, &over, send_callback);
 	}
 
-	void move_player()
+	void createOtherPlayer()
+	{
+		int my_id = g_seesion_map[&over];
+		std::cout << "[Server] 클라이언트 " << my_id << "번에게 다른 플레이어 생성하도록 지시" << std::endl;
+
+		// 다른 플레이어 생성하라는 tpye
+		receivedPacket.type = 5;
+
+		receivedPacket.playerPosIDX = startPlayerPosIDX;
+		receivedPacket.pos = Figure::Boards[receivedPacket.playerPosIDX];
+
+		wsabuf.len = sizeof(packet);
+		wsabuf.buf = reinterpret_cast<CHAR*>(&receivedPacket);
+
+		WSASend(client_s, &wsabuf, 1, nullptr, 0, &over, send_callback);
+	}
+
+	void move_player(int type)
 	{
 		if (receivedPacket.type == 1)		goLeft();
 		else if (receivedPacket.type == 2)	goRight();
@@ -93,6 +117,11 @@ public:
 		std::cout << "Client pos: (" << receivedPacket.pos.x << ", " << receivedPacket.pos.y << ", " << receivedPacket.pos.z << ")" << std::endl;
 
 		WSASend(client_s, &wsabuf, 1, nullptr, 0, &over, send_callback);
+	}
+
+	void moveOtherPlayer(int serverID)
+	{
+
 	}
 
 	GLvoid goLeft()
@@ -134,8 +163,6 @@ public:
 
 std::unordered_map<int, SESSION> g_players;
 
-
-
 void print_error(const char* msg, int err_no)
 {
 	WCHAR *msg_buf;
@@ -174,6 +201,22 @@ void CALLBACK recv_callback(DWORD err, DWORD recv_size, LPWSAOVERLAPPED pover, D
 	}
 
 	g_players[my_id].check_type();
+
+	std::cout << "[Server] my_id:" << my_id << std::endl;
+
+	// 다른 클라이언트에게 해당 플레이어의 말을 움직이라고 지시
+	//send_other_people(my_id);
+}
+
+void send_other_people(int id)
+{
+	for (auto& player : g_players)
+	{
+		if (player.first != id)
+		{
+			player.second.createOtherPlayer();
+		}
+	}
 }
 
 int main(void)
