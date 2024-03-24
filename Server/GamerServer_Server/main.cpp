@@ -82,9 +82,6 @@ public:
 
 		receivedPacket.otherSeverID = 0;
 
-		wsabuf.len = sizeof(packet);
-		wsabuf.buf = reinterpret_cast<CHAR*>(&receivedPacket);
-
 		WSASend(client_s, &wsabuf, 1, nullptr, 0, &over, send_callback);
 	}
 
@@ -98,9 +95,6 @@ public:
 
 		receivedPacket.playerPosIDX = startPlayerPosIDX;
 		receivedPacket.pos = Figure::Boards[receivedPacket.playerPosIDX];
-
-		wsabuf.len = sizeof(packet);
-		wsabuf.buf = reinterpret_cast<CHAR*>(&receivedPacket);
 
 		WSASend(client_s, &wsabuf, 1, nullptr, 0, &over, send_callback);
 	}
@@ -186,6 +180,8 @@ void CALLBACK send_callback(DWORD err, DWORD sent_size, LPWSAOVERLAPPED pover, D
 	}
 
 	g_players[g_seesion_map[pover]].do_recv();
+
+	std::cout << "[Server] type:" << g_players[g_seesion_map[pover]].receivedPacket.type << std::endl;
 }
 
 void CALLBACK recv_callback(DWORD err, DWORD recv_size, LPWSAOVERLAPPED pover, DWORD recv_flag)
@@ -205,7 +201,7 @@ void CALLBACK recv_callback(DWORD err, DWORD recv_size, LPWSAOVERLAPPED pover, D
 	std::cout << "[Server] my_id:" << my_id << std::endl;
 
 	// 다른 클라이언트에게 해당 플레이어의 말을 움직이라고 지시
-	//send_other_people(my_id);
+	send_other_people(my_id);
 }
 
 void send_other_people(int id)
@@ -214,7 +210,7 @@ void send_other_people(int id)
 	{
 		if (player.first != id)
 		{
-			player.second.createOtherPlayer();
+			g_players[player.first].createOtherPlayer();
 		}
 	}
 }

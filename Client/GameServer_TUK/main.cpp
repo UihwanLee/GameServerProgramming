@@ -28,6 +28,8 @@ void create_player();
 void move_player();
 void create_other_player();
 
+void print_error(const char* msg, int err_no);
+
 SOCKET server_s;
 char buf[BUFSIZE];
 
@@ -92,14 +94,30 @@ void send_move_packet(int type);
 
 packet receivedPacket;
 
-GLvoid update(int value)
+void do_recv()
 {
-	// 30 밀리초 마다 수행
-	SleepEx(0, TRUE);
-	glutPostRedisplay();
-	glutTimerFunc(10, update, 1);
+	wsabuf.len = sizeof(packet);
+	wsabuf.buf = reinterpret_cast<CHAR*>(&receivedPacket);
+	DWORD recv_size;
+	DWORD recv_flag = 0;
+	ZeroMemory(&wsaover, sizeof(wsaover));
+	int res = WSARecv(server_s, &wsabuf, 1, &recv_size, &recv_flag, &wsaover, recv_callback);
+
+	if (0 != res) {
+		int err_no = WSAGetLastError();
+		if (WSA_IO_PENDING != err_no)
+			print_error("WSARecv", WSAGetLastError());
+	}
 }
 
+GLvoid update(int value)
+{
+	// 30 밀리초 마다 CALLBACK 호출 및 서버 recv 함수 호출
+	SleepEx(0, TRUE);
+	do_recv();
+	glutPostRedisplay();
+	glutTimerFunc(30, update, 1);
+}
 
 void send_move_packet(int type)
 {
@@ -119,11 +137,33 @@ void send_move_packet(int type)
 	WSASend(server_s, &wsabuf, 1, nullptr, 0, &wsaover, send_callback);
 }
 
+void print_error(const char* msg, int err_no)
+{
+	WCHAR* msg_buf;
+	FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
+		NULL, err_no,
+		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+		reinterpret_cast<LPWSTR>(&msg_buf), 0, NULL);
+
+	std::cout << msg;
+	std::wcout << L": 에러 : " << msg_buf;
+	while (true);
+	LocalFree(msg_buf);
+}
+
 void CALLBACK recv_callback(DWORD err, DWORD recv_size,
 	LPWSAOVERLAPPED pwsaover, DWORD sendflag)
 {
-	//std::cout << "Recevice: " << receivedPacket.idx << std::endl;
-	//std::cout << "[Client] 서버로 Packet을 보냄" << std::endl;
+	if (0 != err) {
+		print_error("WSARecv", WSAGetLastError());
+	}
+
+	std::cout << "[Client] recevicepacket tpye: " << receivedPacket.type << "번" << std::endl;
+
+	// 서버에서 받은 데이터로 수행하는 함수 판단
+	check_packet();
+
+	glutPostRedisplay();
 }
 
 void CALLBACK send_callback(DWORD err, DWORD sent_size,
@@ -134,10 +174,7 @@ void CALLBACK send_callback(DWORD err, DWORD sent_size,
 	ZeroMemory(pwsaover, sizeof(*pwsaover));
 	WSARecv(server_s, &wsabuf, 1, nullptr, &recv_flag, pwsaover, recv_callback);
 
-	std::cout << "[Client] recevicepacket tpye: " << receivedPacket.type << "번" << std::endl;
-
-	// 서버에서 받은 데이터로 수행하는 함수 판단
-	check_packet();
+	//std::cout << "[Client] recevicepacket tpye: " << receivedPacket.type << "번" << std::endl;
 }
 
 GLvoid initServer()
@@ -301,7 +338,6 @@ void createShaderProgram()
 
 GLvoid render()
 {
-
 	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT);
 
