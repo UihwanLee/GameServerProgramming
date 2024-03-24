@@ -75,7 +75,7 @@ public:
 		std::cout << "[Server] 클라이언트로 부터 플레이어 생성 요청" << std::endl;
 		receivedPacket.playerPosIDX = startPlayerPosIDX;
 		receivedPacket.pos = Figure::Boards[receivedPacket.playerPosIDX];
-		
+
 		// 서버에서 서버 id값을 저장하고 id값 부여
 		playerList.emplace_back(serverID);
 		receivedPacket.serverID = serverID++;
@@ -159,11 +159,11 @@ std::unordered_map<int, SESSION> g_players;
 
 void print_error(const char* msg, int err_no)
 {
-	WCHAR *msg_buf;
+	WCHAR* msg_buf;
 	FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
 		NULL, err_no,
 		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-		reinterpret_cast<LPWSTR>(& msg_buf), 0, NULL);
+		reinterpret_cast<LPWSTR>(&msg_buf), 0, NULL);
 
 	std::cout << msg;
 	std::wcout << L": 에러 : " << msg_buf;

@@ -358,7 +358,7 @@ void drawView()
 {
 	unsigned int viewLocation = glGetUniformLocation(shaderProgramID, "viewTransform");
 
-	glUniformMatrix4fv(viewLocation, 1, GL_FALSE,glm::value_ptr(camera));
+	glUniformMatrix4fv(viewLocation, 1, GL_FALSE, glm::value_ptr(camera));
 }
 
 void drawProjection()
@@ -377,7 +377,7 @@ void drawProjection()
 	glUniformMatrix4fv(projectionLocation, 1, GL_FALSE, &projection[0][0]);		// 투영변환
 }
 
-void drawObjects(int idx)	
+void drawObjects(int idx)
 {
 	// Model
 	unsigned int modelLocation = glGetUniformLocation(shaderProgramID, "modelTransform");

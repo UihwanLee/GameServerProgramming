@@ -9,6 +9,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include <vector>
+#include <unordered_map>
 
 #pragma comment(lib, "glew32.lib")
 #pragma comment(lib, "freeglut.lib")
