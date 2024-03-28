@@ -8,11 +8,32 @@ constexpr int BUFSIZE = 256;
 
 bool b_shutdown = false;
 
+class SESSION;
+
 std::unordered_map<LPWSAOVERLAPPED, int> g_session_map;
+std::unordered_map<int, SESSION> g_players;
 
 void CALLBACK send_callback(DWORD, DWORD, LPWSAOVERLAPPED, DWORD);
 void CALLBACK recv_callback(DWORD, DWORD, LPWSAOVERLAPPED, DWORD);
 void print_error(const char* msg, int err_no);
+
+class EXP_OVER
+{
+public:
+	WSAOVERLAPPED over;
+	WSABUF wsabuf[1];
+	char buf[BUFSIZE];
+	EXP_OVER(int s_id, char* mess, int m_size)
+	{
+		ZeroMemory(&over, sizeof(over));
+		wsabuf[0].buf = buf;
+		wsabuf[0].len = m_size + 2;
+
+		buf[0] = m_size + 2;
+		buf[1] = s_id;
+		memcpy(buf + 2, mess, m_size);
+	}
+};
 
 class SESSION {
 	char buf[BUFSIZE];
@@ -22,6 +43,8 @@ class SESSION {
 public:
 	SESSION(SOCKET s, int my_id) : client_s(s) {
 		g_session_map[&over] = my_id;
+		wsabuf[0].buf = buf;
+		wsabuf[0].len = BUFSIZE;
 	}
 	SESSION() {
 		std::cout << "ERROR";
@@ -30,8 +53,6 @@ public:
 	~SESSION() { closesocket(client_s); }
 	void do_recv()
 	{
-		wsabuf[0].buf = buf;
-		wsabuf[0].len = BUFSIZE;
 		DWORD recv_flag = 0;
 		ZeroMemory(&over, sizeof(over));
 		int res = WSARecv(client_s, wsabuf, 1, nullptr, &recv_flag, &over, recv_callback);
@@ -42,10 +63,10 @@ public:
 		}
 	}
 
-	void do_send(int recv_size)
+	void do_send(int s_id, char* mess, int recv_size)
 	{
-		wsabuf[0].len = recv_size;
-		int res = WSASend(client_s, wsabuf, 1, nullptr, 0, &over, send_callback);
+		auto b = new EXP_OVER(s_id, mess, recv_size);
+		int res = WSASend(client_s, b->wsabuf, 1, nullptr, 0, &b->over, send_callback);
 		if (0 != res) {
 			print_error("WSARecv", WSAGetLastError());
 		}
@@ -59,9 +80,13 @@ public:
 			std::cout << buf[i];
 		std::cout << std::endl;
 	}
-};
 
-std::unordered_map<int, SESSION> g_players;
+	void broadcast(int m_size)
+	{
+		for (auto& p : g_players)
+			p.second.do_send(g_session_map[&over], buf, m_size);
+	}
+};
 
 void print_error(const char* msg, int err_no)
 {
@@ -82,7 +107,8 @@ void CALLBACK send_callback(DWORD err, DWORD sent_size,
 	if (0 != err) {
 		print_error("WSASend", WSAGetLastError());
 	}
-	g_players[g_session_map[pover]].do_recv();
+	auto b = reinterpret_cast<EXP_OVER*>(pover);
+	delete b;
 }
 
 void CALLBACK recv_callback(DWORD err, DWORD recv_size,
@@ -96,9 +122,9 @@ void CALLBACK recv_callback(DWORD err, DWORD recv_size,
 		g_players.erase(my_id);
 		return;
 	}
-
 	g_players[my_id].print_message(recv_size);
-	g_players[my_id].do_send(recv_size);
+	g_players[my_id].broadcast(recv_size);
+	g_players[my_id].do_recv();
 }
 
 int main()
