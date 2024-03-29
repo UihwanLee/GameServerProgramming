@@ -10,12 +10,11 @@ bool b_shutdown = false;
 
 class SESSION;
 
-std::unordered_map<LPWSAOVERLAPPED, int> g_session_map;
-std::unordered_map<int, SESSION> g_players;
+std::unordered_map<ULONG_PTR, SESSION> g_players;
 
-void CALLBACK send_callback(DWORD, DWORD, LPWSAOVERLAPPED, DWORD);
-void CALLBACK recv_callback(DWORD, DWORD, LPWSAOVERLAPPED, DWORD);
 void print_error(const char* msg, int err_no);
+
+enum C_OP { C_RECV, C_SEND, C_ACCEPT };
 
 class EXP_OVER
 {
@@ -23,6 +22,15 @@ public:
 	WSAOVERLAPPED over;
 	WSABUF wsabuf[1];
 	char buf[BUFSIZE];
+	C_OP c_op;
+
+	EXP_OVER()
+	{
+		ZeroMemory(&over, sizeof(over));
+		wsabuf[0].buf = buf;
+		wsabuf[0].len = BUFSIZE;
+	}
+
 	EXP_OVER(int s_id, char* mess, int m_size)
 	{
 		ZeroMemory(&over, sizeof(over));
@@ -36,15 +44,12 @@ public:
 };
 
 class SESSION {
-	char buf[BUFSIZE];
-	WSABUF wsabuf[1];
+	EXP_OVER recv_over;
 	SOCKET client_s;
-	WSAOVERLAPPED over;
+	char c_id;
 public:
-	SESSION(SOCKET s, int my_id) : client_s(s) {
-		g_session_map[&over] = my_id;
-		wsabuf[0].buf = buf;
-		wsabuf[0].len = BUFSIZE;
+	SESSION(SOCKET s, char my_id) : client_s(s), c_id(my_id) {
+		recv_over.c_op = C_RECV;
 	}
 	SESSION() {
 		std::cout << "ERROR";
@@ -54,8 +59,8 @@ public:
 	void do_recv()
 	{
 		DWORD recv_flag = 0;
-		ZeroMemory(&over, sizeof(over));
-		int res = WSARecv(client_s, wsabuf, 1, nullptr, &recv_flag, &over, recv_callback);
+		ZeroMemory(&recv_over.over, sizeof(recv_over.over));
+		int res = WSARecv(client_s, recv_over.wsabuf, 1, nullptr, &recv_flag, &recv_over.over, nullptr);
 		if (0 != res) {
 			int err_no = WSAGetLastError();
 			if (WSA_IO_PENDING != err_no)
@@ -66,7 +71,8 @@ public:
 	void do_send(int s_id, char* mess, int recv_size)
 	{
 		auto b = new EXP_OVER(s_id, mess, recv_size);
-		int res = WSASend(client_s, b->wsabuf, 1, nullptr, 0, &b->over, send_callback);
+		b->c_op = C_SEND;
+		int res = WSASend(client_s, b->wsabuf, 1, nullptr, 0, &b->over, nullptr);
 		if (0 != res) {
 			print_error("WSARecv", WSAGetLastError());
 		}
@@ -74,17 +80,16 @@ public:
 
 	void print_message(DWORD recv_size)
 	{
-		int my_id = g_session_map[&over];
-		std::cout << "Client[" << my_id << "] Sent : ";
+		std::cout << "Client[" << c_id << "] Sent : ";
 		for (DWORD i = 0; i < recv_size; ++i)
-			std::cout << buf[i];
+			std::cout << recv_over.buf[i];
 		std::cout << std::endl;
 	}
 
 	void broadcast(int m_size)
 	{
 		for (auto& p : g_players)
-			p.second.do_send(g_session_map[&over], buf, m_size);
+			p.second.do_send(p.first, recv_over.buf, m_size);
 	}
 };
 
@@ -97,7 +102,7 @@ void print_error(const char* msg, int err_no)
 		reinterpret_cast<LPWSTR>(&msg_buf), 0, NULL);
 	std::cout << msg;
 	std::wcout << L" : ¿¡·¯ : " << msg_buf;
-	while (true);
+	//while (true);
 	LocalFree(msg_buf);
 }
 
@@ -132,7 +137,9 @@ int main()
 	std::wcout.imbue(std::locale("korean"));
 
 	WSADATA WSAData;
-	WSAStartup(MAKEWORD(2, 0), &WSAData);
+	WSAStartup(MAKEWORD(2, 2), &WSAData);
+
+	HANDLE h_iocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, 0, 0, 0);
 
 	SOCKET server_s = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, nullptr, 0, WSA_FLAG_OVERLAPPED);
 	SOCKADDR_IN server_a;
@@ -143,11 +150,15 @@ int main()
 	listen(server_s, SOMAXCONN);
 	int addr_size = sizeof(server_a);
 	int id = 0;
-	while (false == b_shutdown) {
-		SOCKET client_s = WSAAccept(server_s, reinterpret_cast<sockaddr*>(&server_a), &addr_size, nullptr, 0);
-		g_players.try_emplace(id, client_s, id);
-		g_players[id++].do_recv();
+
+	SOCKET client_s = WSAAccept(server_s, reinterpret_cast<sockaddr*>(&server_a), &addr_size, nullptr, 0);
+	g_players.try_emplace(id, client_s, id);
+	g_players[id++].do_recv();
+
+	while (true) {
+		GetQueuedCompletionStatus(h_iocp, rw_byte, key, &over, INFINITE);
 	}
+
 	g_players.clear();
 	closesocket(server_s);
 	WSACleanup();
