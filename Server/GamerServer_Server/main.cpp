@@ -70,6 +70,11 @@ public:
 		else if (receivedPacket.type >= 1 && receivedPacket.type <= 4)	move_player(receivedPacket.type);
 	}
 
+	void broadcast()
+	{
+
+	}
+
 	void createPlayer()
 	{
 		std::cout << "[Server] 클라이언트로 부터 플레이어 생성 요청" << std::endl;
