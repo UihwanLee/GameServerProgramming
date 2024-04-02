@@ -2,6 +2,8 @@
 #include <WS2tcpip.h>
 #include <unordered_map>
 #pragma comment (lib, "WS2_32.LIB")
+#include <MSWSock.h>
+#pragma comment (lib, "MSWSock.LIB")
 
 constexpr short PORT = 4000;
 constexpr int BUFSIZE = 256;
@@ -89,7 +91,7 @@ public:
 	void broadcast(int m_size)
 	{
 		for (auto& p : g_players)
-			p.second.do_send(p.first, recv_over.buf, m_size);
+			p.second.do_send(static_cast<int>(p.first), recv_over.buf, m_size);
 	}
 };
 
@@ -106,31 +108,6 @@ void print_error(const char* msg, int err_no)
 	LocalFree(msg_buf);
 }
 
-void CALLBACK send_callback(DWORD err, DWORD sent_size,
-	LPWSAOVERLAPPED pover, DWORD recv_flag)
-{
-	if (0 != err) {
-		print_error("WSASend", WSAGetLastError());
-	}
-	auto b = reinterpret_cast<EXP_OVER*>(pover);
-	delete b;
-}
-
-void CALLBACK recv_callback(DWORD err, DWORD recv_size,
-	LPWSAOVERLAPPED pover, DWORD recv_flag)
-{
-	if (0 != err) {
-		print_error("WSARecv", WSAGetLastError());
-	}
-	int my_id = g_session_map[pover];
-	if (0 == recv_size) {
-		g_players.erase(my_id);
-		return;
-	}
-	g_players[my_id].print_message(recv_size);
-	g_players[my_id].broadcast(recv_size);
-	g_players[my_id].do_recv();
-}
 
 int main()
 {
@@ -151,12 +128,54 @@ int main()
 	int addr_size = sizeof(server_a);
 	int id = 0;
 
-	SOCKET client_s = WSAAccept(server_s, reinterpret_cast<sockaddr*>(&server_a), &addr_size, nullptr, 0);
-	g_players.try_emplace(id, client_s, id);
-	g_players[id++].do_recv();
+	SOCKET client_s = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, nullptr, 0, WSA_FLAG_OVERLAPPED);
+	EXP_OVER accept_over;
+	ZeroMemory(&accept_over.over, sizeof(accept_over.over));
+	accept_over.c_op = C_ACCEPT;
+	CreateIoCompletionPort(reinterpret_cast<HANDLE>(server_s), h_iocp, -1, 0);
+	AcceptEx(server_s, client_s, accept_over.buf, 0, addr_size + 16, addr_size + 16, nullptr, &accept_over.over);
 
 	while (true) {
-		GetQueuedCompletionStatus(h_iocp, rw_byte, key, &over, INFINITE);
+		DWORD rw_byte;
+		ULONG_PTR key;
+		WSAOVERLAPPED* over;
+		BOOL ret = GetQueuedCompletionStatus(h_iocp, &rw_byte, &key, &over, INFINITE);
+		if (FALSE == ret) {
+			print_error("GQCS", WSAGetLastError());
+			exit(-1);
+		}
+		EXP_OVER* e_over = reinterpret_cast<EXP_OVER*>(over);
+		switch (e_over->c_op)
+		{
+		case C_RECV: {
+			int my_id = static_cast<int>(key);
+			if (0 == rw_byte) {
+				g_players.erase(my_id);
+				continue;
+			}
+			g_players[my_id].print_message(rw_byte);
+			g_players[my_id].broadcast(rw_byte);
+			g_players[my_id].do_recv();
+		}
+				   break;
+		case C_SEND: {
+			delete e_over;
+		}
+				   break;
+		case C_ACCEPT: {
+			CreateIoCompletionPort(reinterpret_cast<HANDLE>(client_s), h_iocp, id, 0);
+			g_players.try_emplace(id, client_s, id);
+			g_players[id++].do_recv();
+
+			client_s = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, nullptr, 0, WSA_FLAG_OVERLAPPED);
+			ZeroMemory(&accept_over.over, sizeof(accept_over.over));
+			AcceptEx(server_s, client_s, accept_over.buf, 0, addr_size + 16, addr_size + 16, nullptr, &accept_over.over);
+		}
+					 break;
+		default:
+			break;
+		}
+
 	}
 
 	g_players.clear();
