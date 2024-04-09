@@ -5,6 +5,7 @@
 #include <mutex>
 #include <atomic>
 #include <queue>
+#include <concurrent_queue.h>
 
 using namespace std::chrono;
 
@@ -16,6 +17,7 @@ struct POSITION { int x, y, z; };
 std::atomic <POSITION> my_position;
 
 //std::atomic <std::queue<int>> my_queue;
+concurrency::concurrent_queue<int> my_queue;
 
 std::atomic <int> a_sum;
 
