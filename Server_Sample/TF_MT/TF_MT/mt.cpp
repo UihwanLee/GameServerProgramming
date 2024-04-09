@@ -4,11 +4,18 @@
 #include <chrono>
 #include <mutex>
 #include <atomic>
+#include <queue>
 
 using namespace std::chrono;
 
 volatile int g_sum = 0;
 std::mutex sum_lock;
+
+struct POSITION { int x, y, z; };
+
+std::atomic <POSITION> my_position;
+
+//std::atomic <std::queue<int>> my_queue;
 
 std::atomic <int> a_sum;
 
