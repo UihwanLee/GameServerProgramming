@@ -28,11 +28,8 @@ void a_thread_worker(const int num_th)
 {
 	for (auto i = 0; i < 50000000 / num_th; ++i)
 	{
-		a_sum = a_sum + 2;
+		a_sum += 2;
 	}
-	sum_lock.lock();
-	g_sum = g_sum + a_sum;
-	sum_lock.unlock();
 }
 
 int main()
@@ -72,7 +69,7 @@ int main()
 
 	{
 		for (int num_threads = 1; num_threads <= 16; num_threads *= 2) {
-			g_sum = 0;
+			a_sum = 0;
 			auto start_t = high_resolution_clock::now();
 			std::vector<std::thread> threads;
 			for (int i = 0; i < num_threads; ++i)
