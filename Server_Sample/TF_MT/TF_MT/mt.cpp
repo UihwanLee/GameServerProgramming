@@ -11,11 +11,13 @@ std::mutex sum_lock;
 
 void thread_worker(const int num_th)
 {
-	sum_lock.lock();
+	volatile int local_sum = 0;
 	for (auto i = 0; i < 50000000 / num_th; ++i)
 	{
-		g_sum = g_sum + 2;
+		local_sum = local_sum + 2;
 	}
+	sum_lock.lock();
+	g_sum = g_sum + local_sum;
 	sum_lock.unlock();
 }
 
