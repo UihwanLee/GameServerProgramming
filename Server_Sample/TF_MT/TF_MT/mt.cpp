@@ -14,7 +14,7 @@ void thread_worker(int th_id)
 
 int main()
 {
-	int sum = 0;
+	volatile int sum = 0;
 
 	auto start_t = high_resolution_clock::now();
 	for (int i = 0; i < 50000000; ++i)
