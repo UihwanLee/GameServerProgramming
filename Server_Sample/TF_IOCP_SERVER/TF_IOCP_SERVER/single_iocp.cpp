@@ -13,6 +13,7 @@ using namespace std;
 constexpr int MAX_USER = 10;
 
 enum COMP_TYPE { OP_ACCEPT, OP_RECV, OP_SEND };
+enum class S_STATE { ST_FREE, ST_ALLOC, ST_INGAME };
 class OVER_EXP {
 public:
 	WSAOVERLAPPED _over;
@@ -41,7 +42,7 @@ class SESSION {
 	OVER_EXP _recv_over;
 
 public:
-	bool in_use;
+	std::atomic<S_STATE> in_use;
 	int _id;
 	SOCKET _socket;
 	short	x, y;
@@ -49,7 +50,7 @@ public:
 
 	int		_prev_remain;
 public:
-	SESSION() : _socket(0), in_use(false)
+	SESSION() : _socket(0), in_use(S_STATE::ST_FREE)
 	{
 		_id = -1;
 		x = y = 0;
@@ -106,7 +107,7 @@ void SESSION::send_move_packet(int c_id)
 int get_new_client_id()
 {
 	for (int i = 0; i < MAX_USER; ++i)
-		if (clients[i].in_use == false)
+		if (clients[i].in_use == S_STATE::ST_FREE)
 			return i;
 	return -1;
 }
@@ -117,10 +118,11 @@ void process_packet(int c_id, char* packet)
 	case CS_LOGIN: {
 		CS_LOGIN_PACKET* p = reinterpret_cast<CS_LOGIN_PACKET*>(packet);
 		strcpy_s(clients[c_id]._name, p->name);
+		clients[c_id].in_use = S_STATE::ST_INGAME;
 		clients[c_id].send_login_info_packet();
 
 		for (auto& pl : clients) {
-			if (false == pl.in_use) continue;
+			if (S_STATE::ST_INGAME != pl.in_use) continue;
 			if (pl._id == c_id) continue;
 			SC_ADD_PLAYER_PACKET add_packet;
 			add_packet.id = c_id;
@@ -132,7 +134,7 @@ void process_packet(int c_id, char* packet)
 			pl.do_send(&add_packet);
 		}
 		for (auto& pl : clients) {
-			if (false == pl.in_use) continue;
+			if (S_STATE::ST_INGAME != pl.in_use) continue;
 			if (pl._id == c_id) continue;
 			SC_ADD_PLAYER_PACKET add_packet;
 			add_packet.id = pl._id;
@@ -158,7 +160,7 @@ void process_packet(int c_id, char* packet)
 		clients[c_id].x = x;
 		clients[c_id].y = y;
 		for (auto& pl : clients)
-			if (true == pl.in_use)
+			if (S_STATE::ST_INGAME == pl.in_use)
 				pl.send_move_packet(c_id);
 		break;
 	}
@@ -168,7 +170,7 @@ void process_packet(int c_id, char* packet)
 void disconnect(int c_id)
 {
 	for (auto& pl : clients) {
-		if (pl.in_use == false) continue;
+		if (pl.in_use != S_STATE::ST_INGAME) continue;
 		if (pl._id == c_id) continue;
 		SC_REMOVE_PLAYER_PACKET p;
 		p.id = c_id;
@@ -177,7 +179,13 @@ void disconnect(int c_id)
 		pl.do_send(&p);
 	}
 	closesocket(clients[c_id]._socket);
-	clients[c_id].in_use = false;
+	clients[c_id].in_use = S_STATE::ST_FREE;
+}
+
+void Initialize()
+{
+	for (int i = 0; i < clients.size(); ++i)
+		clients[i]._id = i;
 }
 
 void worker(SOCKET server)
@@ -206,7 +214,7 @@ void worker(SOCKET server)
 			int client_id = get_new_client_id();
 			SOCKET c_socket = ex_over->_client_socket;
 			if (client_id != -1) {
-				clients[client_id].in_use = true;
+				clients[client_id].in_use = S_STATE::ST_ALLOC;
 				clients[client_id].x = 0;
 				clients[client_id].y = 0;
 				clients[client_id]._id = client_id;
@@ -277,6 +285,8 @@ int main()
 	a_over._comp_type = OP_ACCEPT;
 	a_over._client_socket = c_socket;
 	AcceptEx(server, c_socket, a_over._send_buf, 0, addr_size + 16, addr_size + 16, 0, &a_over._over);
+
+	Initialize();
 
 	int num_threads = std::thread::hardware_concurrency();
 	std::vector<std::thread> worker_threads;
