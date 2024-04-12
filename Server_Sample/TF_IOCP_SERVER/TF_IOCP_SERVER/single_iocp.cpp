@@ -2,6 +2,9 @@
 #include <array>
 #include <WS2tcpip.h>
 #include <MSWSock.h>
+#include <thread>
+#include <mutex>
+#include <vector>
 #include "protocol.h"
 
 #pragma comment(lib, "WS2_32.lib")
@@ -16,6 +19,7 @@ public:
 	WSABUF _wsabuf;
 	char _send_buf[BUF_SIZE];
 	COMP_TYPE _comp_type;
+	SOCKET _client_socket;
 	OVER_EXP()
 	{
 		_wsabuf.len = BUF_SIZE;
@@ -86,6 +90,7 @@ public:
 };
 
 array<SESSION, MAX_USER> clients;
+HANDLE g_h_iocp;
 
 void SESSION::send_move_packet(int c_id)
 {
@@ -175,36 +180,13 @@ void disconnect(int c_id)
 	clients[c_id].in_use = false;
 }
 
-int main()
+void worker(SOCKET server)
 {
-	HANDLE h_iocp;
-
-	WSADATA WSAData;
-	WSAStartup(MAKEWORD(2, 2), &WSAData);
-	SOCKET server = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
-	SOCKADDR_IN server_addr;
-	memset(&server_addr, 0, sizeof(server_addr));
-	server_addr.sin_family = AF_INET;
-	server_addr.sin_port = htons(PORT_NUM);
-	server_addr.sin_addr.S_un.S_addr = INADDR_ANY;
-	bind(server, reinterpret_cast<sockaddr*>(&server_addr), sizeof(server_addr));
-	listen(server, SOMAXCONN);
-	SOCKADDR_IN cl_addr;
-	int addr_size = sizeof(cl_addr);
-	int client_id = 0;
-
-	h_iocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, 0, 0, 0);
-	CreateIoCompletionPort(reinterpret_cast<HANDLE>(server), h_iocp, 9999, 0);
-	SOCKET c_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
-	OVER_EXP a_over;
-	a_over._comp_type = OP_ACCEPT;
-	AcceptEx(server, c_socket, a_over._send_buf, 0, addr_size + 16, addr_size + 16, 0, &a_over._over);
-
 	while (true) {
 		DWORD num_bytes;
 		ULONG_PTR key;
 		WSAOVERLAPPED* over = nullptr;
-		BOOL ret = GetQueuedCompletionStatus(h_iocp, &num_bytes, &key, &over, INFINITE);
+		BOOL ret = GetQueuedCompletionStatus(g_h_iocp, &num_bytes, &key, &over, INFINITE);
 		OVER_EXP* ex_over = reinterpret_cast<OVER_EXP*>(over);
 		if (FALSE == ret) {
 			if (ex_over->_comp_type == OP_ACCEPT) {
@@ -222,6 +204,7 @@ int main()
 		switch (ex_over->_comp_type) {
 		case OP_ACCEPT: {
 			int client_id = get_new_client_id();
+			SOCKET c_socket = ex_over->_client_socket;
 			if (client_id != -1) {
 				clients[client_id].in_use = true;
 				clients[client_id].x = 0;
@@ -231,7 +214,7 @@ int main()
 				clients[client_id]._prev_remain = 0;
 				clients[client_id]._socket = c_socket;
 				CreateIoCompletionPort(reinterpret_cast<HANDLE>(c_socket),
-					h_iocp, client_id, 0);
+					g_h_iocp, client_id, 0);
 				clients[client_id].do_recv();
 			}
 			else {
@@ -240,8 +223,10 @@ int main()
 				closesocket(c_socket);
 			}
 			c_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
-			ZeroMemory(&a_over._over, sizeof(a_over._over));
-			AcceptEx(server, c_socket, a_over._send_buf, 0, addr_size + 16, addr_size + 16, 0, &a_over._over);
+			ZeroMemory(&ex_over->_over, sizeof(ex_over->_over));
+			ex_over->_client_socket = c_socket;
+			int addr_size = sizeof(SOCKADDR_IN);
+			AcceptEx(server, c_socket, ex_over->_send_buf, 0, addr_size + 16, addr_size + 16, 0, &ex_over->_over);
 			break;
 		}
 		case OP_RECV: {
@@ -267,6 +252,42 @@ int main()
 			break;
 		}
 	}
+}
+
+int main()
+{
+	WSADATA WSAData;
+	WSAStartup(MAKEWORD(2, 2), &WSAData);
+	SOCKET server = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
+	SOCKADDR_IN server_addr;
+	memset(&server_addr, 0, sizeof(server_addr));
+	server_addr.sin_family = AF_INET;
+	server_addr.sin_port = htons(PORT_NUM);
+	server_addr.sin_addr.S_un.S_addr = INADDR_ANY;
+	bind(server, reinterpret_cast<sockaddr*>(&server_addr), sizeof(server_addr));
+	listen(server, SOMAXCONN);
+	SOCKADDR_IN cl_addr;
+	int addr_size = sizeof(cl_addr);
+	int client_id = 0;
+
+	g_h_iocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, 0, 0, 0);
+	CreateIoCompletionPort(reinterpret_cast<HANDLE>(server), g_h_iocp, 9999, 0);
+	SOCKET c_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
+	OVER_EXP a_over;
+	a_over._comp_type = OP_ACCEPT;
+	a_over._client_socket = c_socket;
+	AcceptEx(server, c_socket, a_over._send_buf, 0, addr_size + 16, addr_size + 16, 0, &a_over._over);
+
+	int num_threads = std::thread::hardware_concurrency();
+	std::vector<std::thread> worker_threads;
+	for (int i = 0; i < num_threads; ++i) {
+		worker_threads.emplace_back(worker, server);
+	}
+
+	for (auto& w : worker_threads) {
+		w.join();
+	}
+
 	closesocket(server);
 	WSACleanup();
 }
