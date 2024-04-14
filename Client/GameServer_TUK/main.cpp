@@ -79,7 +79,7 @@ struct packet {
 	int			type;
 	int			serverID;
 	int			playerPosIDX;
-	int			otherSeverID;
+	int			currentPlayerCount;
 	glm::vec3	pos;
 };
 #pragma pack (pop)
@@ -125,6 +125,7 @@ void send_move_packet(int type)
 	receivedPacket.type = type;
 	receivedPacket.serverID = m_ObjectManager->getServerID();
 	receivedPacket.playerPosIDX = m_ObjectManager->getCurrentIDX();
+	receivedPacket.currentPlayerCount = 0;
 	receivedPacket.pos = glm::vec3(0.0f, 0.0f, 0.0f);
 
 	wsabuf.len = sizeof(packet);
@@ -157,8 +158,6 @@ void CALLBACK recv_callback(DWORD err, DWORD recv_size,
 	if (0 != err) {
 		print_error("WSARecv", WSAGetLastError());
 	}
-
-	std::cout << "[Client] recevicepacket tpye: " << receivedPacket.type << "번" << std::endl;
 
 	// 서버에서 받은 데이터로 수행하는 함수 판단
 	check_packet();
@@ -429,13 +428,6 @@ void check_packet()
 	// 서버에서 받아온 packet의 type을 확인하여 적절한 함수를 실행
 	if (receivedPacket.type == 0)
 	{
-		// 이미 접속된 플레이어 처리
-		if (receivedPacket.serverID > 0)
-		{
-			for (int i = 0; i < receivedPacket.serverID; i++)
-				create_other_player();
-		}
-
 		create_player();
 	}
 	else if (receivedPacket.type >= 1 && receivedPacket.type <= 4)
@@ -450,17 +442,12 @@ void check_packet()
 
 void create_player()
 {
-	// 자신의 플레이어를 생성하기 전 서버에 저장되어 있는 다른 플레이어 생성
-
 	// 초기 플레이어를 생성한다.
 	m_ObjectManager->setCurrentIDX(receivedPacket.playerPosIDX);
 	playerID = m_ObjectManager->creatPlayer(&idx);
 
-	// 받은 플레이어 ID 값을 playerList에 추가한다.
-	m_ObjectManager->addPlayer(playerID);
-
 	// 서버로부터 받은 서버 아이디를 세팅한다
-	m_ObjectManager->setServerID(receivedPacket.serverID);
+	m_ObjectManager->setServerID(playerID);
 
 	std::cout << "[Client" << m_ObjectManager->getServerID() << "]: 서버로 부터 요청받아 자신의 플레이 말 생성!" << std::endl;
 }
@@ -469,12 +456,10 @@ void create_other_player()
 {
 	std::cout << "[Client" << m_ObjectManager->getServerID() << "]: 서버로 부터 요청받아 다른 플레이 말 생성!" << std::endl;
 
-	// 새로 들어온 플레이어 생성
+	// 자신의 플레이어를 생성하기 전 서버에 저장되어 있는 다른 플레이어 생성
 	m_ObjectManager->setCurrentIDX(receivedPacket.playerPosIDX);
 	playerID = m_ObjectManager->creatPlayer(&idx);
-
-	// 받은 플레이어 ID 값을 playerList에 추가한다.
-	m_ObjectManager->addPlayer(playerID);
+	m_ObjectManager->setPosition(playerID, receivedPacket.pos);
 }
 
 void move_player()
@@ -487,8 +472,10 @@ void move_player()
 		return;
 	}
 
+	cout << receivedPacket.serverID << "번 IDX 말 이동" << endl;
+
 	// 서버에서 받은 Position으로 말 이동
-	m_ObjectManager->setPosition(m_ObjectManager->getMyPlayer(), receivedPacket.pos);
+	m_ObjectManager->setPosition(receivedPacket.serverID, receivedPacket.pos);
 	m_ObjectManager->setCurrentIDX(receivedPacket.playerPosIDX);
 }
 

@@ -18,7 +18,7 @@ struct packet {
 	int			type;
 	int			serverID;
 	int			playerPosIDX;
-	int			otherSeverID;
+	int			currentPlayerCount;
 	glm::vec3	pos;
 };
 #pragma pack (pop)
@@ -29,7 +29,10 @@ int startPlayerPosIDX = 35;
 int serverID = 0;
 std::vector<int> playerList;
 
+class SESSION;
+
 std::unordered_map<LPWSAOVERLAPPED, int> g_seesion_map;
+std::unordered_map<int, SESSION> g_players;
 
 class SESSION {
 public:
@@ -37,9 +40,11 @@ public:
 	char buf[BUFSIZE];
 	WSABUF wsabuf;
 	SOCKET client_s;
+	int my_pos_id;
 	WSAOVERLAPPED over;
 public:
 	SESSION(SOCKET s, int my_id) : client_s(s) {
+		my_pos_id = startPlayerPosIDX;
 		g_seesion_map[&over] = my_id;
 	}
 	SESSION() {
@@ -66,13 +71,51 @@ public:
 
 	void check_type()
 	{
-		if (receivedPacket.type == 0)									createPlayer();
-		else if (receivedPacket.type >= 1 && receivedPacket.type <= 4)	move_player(receivedPacket.type);
+		int my_id = g_seesion_map[&over];
+		if (receivedPacket.type == 0)
+		{
+			// 먼저 들어온 플레이어 생성
+			for (auto& player : g_players)
+			{
+				if (player.first != my_id)
+				{
+					receivedPacket.type = 5;
+					receivedPacket.pos = Figure::Boards[g_players[my_id].my_pos_id];
+
+					WSASend(client_s, &wsabuf, 1, nullptr, 0, &over, send_callback);
+				}
+			}
+
+			receivedPacket.type = 0;
+
+			broadcast(my_id);
+
+			createPlayer();
+		}
+		else if (receivedPacket.type >= 1 && receivedPacket.type <= 4)
+		{
+			broadcast(my_id);
+
+			move_player(receivedPacket.type, receivedPacket.serverID, true);
+		}
 	}
 
-	void broadcast()
+	void broadcast(int id)
 	{
-
+		for (auto& player : g_players)
+		{
+			if (player.first != id)
+			{
+				if (receivedPacket.type == 0)
+				{
+					g_players[player.first].createOtherPlayer();
+				}
+				else if (receivedPacket.type >= 1 && receivedPacket.type <= 4)
+				{
+					g_players[player.first].move_player(receivedPacket.type, receivedPacket.serverID, false);
+				}
+			}
+		}
 	}
 
 	void createPlayer()
@@ -81,11 +124,11 @@ public:
 		receivedPacket.playerPosIDX = startPlayerPosIDX;
 		receivedPacket.pos = Figure::Boards[receivedPacket.playerPosIDX];
 
+		receivedPacket.type = 0;
+
 		// 서버에서 서버 id값을 저장하고 id값 부여
 		playerList.emplace_back(serverID);
-		receivedPacket.serverID = serverID++;
-
-		receivedPacket.otherSeverID = 0;
+		receivedPacket.currentPlayerCount = playerList.size();
 
 		WSASend(client_s, &wsabuf, 1, nullptr, 0, &over, send_callback);
 	}
@@ -104,7 +147,7 @@ public:
 		WSASend(client_s, &wsabuf, 1, nullptr, 0, &over, send_callback);
 	}
 
-	void move_player(int type)
+	void move_player(int type, int serverID, bool my_self)
 	{
 		if (receivedPacket.type == 1)		goLeft();
 		else if (receivedPacket.type == 2)	goRight();
@@ -115,12 +158,12 @@ public:
 		std::cout << "Client[" << my_id << "]에게 다음 pos를 보냄";
 		std::cout << "Client pos: (" << receivedPacket.pos.x << ", " << receivedPacket.pos.y << ", " << receivedPacket.pos.z << ")" << std::endl;
 
+		receivedPacket.serverID = serverID;
+		
+		// 자기 자신의 이동 통신 요청이면 pos 값 저장
+		if (my_self) my_pos_id = receivedPacket.playerPosIDX;
+
 		WSASend(client_s, &wsabuf, 1, nullptr, 0, &over, send_callback);
-	}
-
-	void moveOtherPlayer(int serverID)
-	{
-
 	}
 
 	GLvoid goLeft()
@@ -159,8 +202,6 @@ public:
 		receivedPacket.pos = Figure::Boards[receivedPacket.playerPosIDX];
 	}
 };
-
-std::unordered_map<int, SESSION> g_players;
 
 void print_error(const char* msg, int err_no)
 {
@@ -201,12 +242,10 @@ void CALLBACK recv_callback(DWORD err, DWORD recv_size, LPWSAOVERLAPPED pover, D
 		return;
 	}
 
-	g_players[my_id].check_type();
-
 	std::cout << "[Server] my_id:" << my_id << std::endl;
 
 	// 다른 클라이언트에게 해당 플레이어의 말을 움직이라고 지시
-	send_other_people(my_id);
+	g_players[my_id].check_type();
 }
 
 void send_other_people(int id)
