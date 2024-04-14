@@ -18,7 +18,7 @@ struct packet {
 	int			type;
 	int			serverID;
 	int			playerPosIDX;
-	int			currentPlayerCount;
+	bool		isMyID;
 	glm::vec3	pos;
 };
 #pragma pack (pop)
@@ -74,29 +74,30 @@ public:
 		int my_id = g_seesion_map[&over];
 		if (receivedPacket.type == 0)
 		{
+			receivedPacket.isMyID = false;
+
 			// 먼저 들어온 플레이어 생성
 			for (auto& player : g_players)
 			{
 				if (player.first != my_id)
 				{
-					receivedPacket.type = 5;
-					receivedPacket.pos = Figure::Boards[g_players[my_id].my_pos_id];
+					receivedPacket.pos = Figure::Boards[g_players[player.first].my_pos_id];
 
 					WSASend(client_s, &wsabuf, 1, nullptr, 0, &over, send_callback);
 				}
 			}
 
-			receivedPacket.type = 0;
-
 			broadcast(my_id);
+
+			receivedPacket.isMyID = true;
 
 			createPlayer();
 		}
 		else if (receivedPacket.type >= 1 && receivedPacket.type <= 4)
 		{
-			broadcast(my_id);
-
 			move_player(receivedPacket.type, receivedPacket.serverID, true);
+
+			broadcast(my_id);
 		}
 	}
 
@@ -108,11 +109,12 @@ public:
 			{
 				if (receivedPacket.type == 0)
 				{
-					g_players[player.first].createOtherPlayer();
+					g_players[player.first].createPlayer();
 				}
 				else if (receivedPacket.type >= 1 && receivedPacket.type <= 4)
 				{
-					g_players[player.first].move_player(receivedPacket.type, receivedPacket.serverID, false);
+					std::cout << "[Server] 다른 플레이어 말 이동" << std::endl;
+					g_players[player.first].move_ohter_player(receivedPacket.serverID, receivedPacket.pos);
 				}
 			}
 		}
@@ -128,21 +130,6 @@ public:
 
 		// 서버에서 서버 id값을 저장하고 id값 부여
 		playerList.emplace_back(serverID);
-		receivedPacket.currentPlayerCount = playerList.size();
-
-		WSASend(client_s, &wsabuf, 1, nullptr, 0, &over, send_callback);
-	}
-
-	void createOtherPlayer()
-	{
-		int my_id = g_seesion_map[&over];
-		std::cout << "[Server] 클라이언트 " << my_id << "번에게 다른 플레이어 생성하도록 지시" << std::endl;
-
-		// 다른 플레이어 생성하라는 tpye
-		receivedPacket.type = 5;
-
-		receivedPacket.playerPosIDX = startPlayerPosIDX;
-		receivedPacket.pos = Figure::Boards[receivedPacket.playerPosIDX];
 
 		WSASend(client_s, &wsabuf, 1, nullptr, 0, &over, send_callback);
 	}
@@ -162,6 +149,14 @@ public:
 		
 		// 자기 자신의 이동 통신 요청이면 pos 값 저장
 		if (my_self) my_pos_id = receivedPacket.playerPosIDX;
+
+		WSASend(client_s, &wsabuf, 1, nullptr, 0, &over, send_callback);
+	}
+
+	void move_ohter_player(int serverID, glm::vec3	pos)
+	{
+		receivedPacket.serverID = serverID;
+		receivedPacket.pos = pos;
 
 		WSASend(client_s, &wsabuf, 1, nullptr, 0, &over, send_callback);
 	}
@@ -248,16 +243,6 @@ void CALLBACK recv_callback(DWORD err, DWORD recv_size, LPWSAOVERLAPPED pover, D
 	g_players[my_id].check_type();
 }
 
-void send_other_people(int id)
-{
-	for (auto& player : g_players)
-	{
-		if (player.first != id)
-		{
-			g_players[player.first].createOtherPlayer();
-		}
-	}
-}
 
 int main(void)
 {

@@ -79,7 +79,7 @@ struct packet {
 	int			type;
 	int			serverID;
 	int			playerPosIDX;
-	int			currentPlayerCount;
+	bool		isMyID;
 	glm::vec3	pos;
 };
 #pragma pack (pop)
@@ -125,7 +125,6 @@ void send_move_packet(int type)
 	receivedPacket.type = type;
 	receivedPacket.serverID = m_ObjectManager->getServerID();
 	receivedPacket.playerPosIDX = m_ObjectManager->getCurrentIDX();
-	receivedPacket.currentPlayerCount = 0;
 	receivedPacket.pos = glm::vec3(0.0f, 0.0f, 0.0f);
 
 	wsabuf.len = sizeof(packet);
@@ -434,10 +433,6 @@ void check_packet()
 	{
 		move_player();
 	}
-	else if (receivedPacket.type == 5)
-	{
-		create_other_player();
-	}
 }
 
 void create_player()
@@ -445,9 +440,12 @@ void create_player()
 	// 초기 플레이어를 생성한다.
 	m_ObjectManager->setCurrentIDX(receivedPacket.playerPosIDX);
 	playerID = m_ObjectManager->creatPlayer(&idx);
+	m_ObjectManager->setPosition(playerID, receivedPacket.pos);
 
 	// 서버로부터 받은 서버 아이디를 세팅한다
-	m_ObjectManager->setServerID(playerID);
+	if(receivedPacket.isMyID)
+		m_ObjectManager->setServerID(playerID);
+
 
 	std::cout << "[Client" << m_ObjectManager->getServerID() << "]: 서버로 부터 요청받아 자신의 플레이 말 생성!" << std::endl;
 }
