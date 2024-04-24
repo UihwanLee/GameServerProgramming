@@ -130,14 +130,12 @@ void ProcessPacket(char* ptr)
 	case SC_LOGIN_INFO:
 	{
 		SC_LOGIN_INFO_PACKET* packet = reinterpret_cast<SC_LOGIN_INFO_PACKET*>(ptr);
-		std::cout << "[클라이언트 접속]" << std::endl;
-		m_ObjectManager->creatPlayer(&playerID);
-		m_ObjectManager->setPlayerPosition(playerID, packet->x, packet->y);
+		std::cout << "[클라이언트 로그인" << std::endl;
+		std::cout << "[플레이어 이동]" << packet->x << ", " << packet->y << std::endl;
+		m_ObjectManager->m_players[packet->id] = m_ObjectManager->creatPlayer();
+		//m_ObjectManager->setPlayerPosition(playerID, packet->x, packet->y);
 
 		g_myid = packet->id;
-		//m_ObjectManager->setPosition(0, vec3(packet->x, packet->y, 0));
-		//avatar.m_x = packet->x;
-		//avatar.m_y = packet->y;
 		g_left_x = packet->x - 8;
 		g_top_y = packet->y - 8;
 		//avatar.show();
@@ -150,14 +148,17 @@ void ProcessPacket(char* ptr)
 		int id = my_packet->id;
 
 		if (id == g_myid) {
-			m_ObjectManager->setPlayerPosition(0, my_packet->x, my_packet->y);
+			std::cout << "[플레이어 추가" << std::endl;
+			m_ObjectManager->setPlayerPosition(g_myid, my_packet->x, my_packet->y);
 			//avatar.move(my_packet->x, my_packet->y);
 			g_left_x = my_packet->x - 4;
 			g_top_y = my_packet->y - 4;
 			//avatar.show();
 		}
 		else if (id < MAX_USER) {
-			m_ObjectManager->setPlayerPosition(0, my_packet->x, my_packet->y);
+			std::cout << "다른 플레이어 추가" << std::endl;
+			m_ObjectManager->m_players[id] = m_ObjectManager->creatPlayer();
+			m_ObjectManager->setPlayerPosition(id, my_packet->x, my_packet->y);
 			//players[id] = OBJECT{ *pieces, 0, 0, 64, 64 };
 			//players[id].move(my_packet->x, my_packet->y);
 			//players[id].set_name(my_packet->name);
@@ -173,18 +174,21 @@ void ProcessPacket(char* ptr)
 	case SC_MOVE_PLAYER:
 	{
 		SC_MOVE_PLAYER_PACKET* my_packet = reinterpret_cast<SC_MOVE_PLAYER_PACKET*>(ptr);
+		std::cout << "[플레이어 이동]" << my_packet->x << ", " << my_packet->y << std::endl;
 		int other_id = my_packet->id;
 		if (other_id == g_myid) {
-			m_ObjectManager->move(0, my_packet->x, my_packet->y);
+			m_ObjectManager->setPlayerPosition(g_myid, my_packet->x, my_packet->y);
 			//avatar.move(my_packet->x, my_packet->y);
 			g_left_x = my_packet->x - 8;
 			g_top_y = my_packet->y - 8;
 		}
 		else if (other_id < MAX_USER) {
-			m_ObjectManager->move(other_id, my_packet->x, my_packet->y);
+			std::cout << "다른 플레이어 이동" << std::endl;
+			m_ObjectManager->setPlayerPosition(other_id, my_packet->x, my_packet->y);
 			//players[other_id].move(my_packet->x, my_packet->y);
 		}
 		else {
+			std::cout << "예외" << std::endl;
 			//npc[other_id - NPC_START].x = my_packet->x;
 			//npc[other_id - NPC_START].y = my_packet->y;
 		}
@@ -419,11 +423,11 @@ GLvoid render()
 			drawObjects(i);
 		}
 	}
-	for (int i = 0; i < m_ObjectManager->m_players.size(); i++)
+	for (auto& player : m_ObjectManager->m_players)
 	{
-		if (m_ObjectManager->m_players[i]->isActive())
+		if (m_ObjectManager->m_players[player.first]->isActive())
 		{
-			drawPlayers(i);
+			drawPlayers(player.first);
 		}
 	}
 
@@ -486,7 +490,7 @@ void drawPlayers(int idx)
 {
 	// Model
 	unsigned int modelLocation = glGetUniformLocation(shaderProgramID, "modelTransform");
-	m_ObjectManager->m_players[idx]->m_model = m_ObjectManager->transformModel(idx);
+	m_ObjectManager->m_players[idx]->m_model = m_ObjectManager->transformModelPlayer(idx);
 	glUniformMatrix4fv(modelLocation, 1, GL_FALSE, glm::value_ptr(m_ObjectManager->m_players[idx]->m_model));
 
 	// Position / Color

@@ -21,7 +21,7 @@ public:
 	void createRect(int* idx, highp_vec3 color);
 	void creatBoard(int* idx);
 
-	int creatPlayer(int* idx);
+	Object* creatPlayer();
 	void setPlayerPosition(int idx, float x, float y);
 
 	void setPosition(int idx, float x, float y, float z);
@@ -38,6 +38,7 @@ public:
 
 public:
 	mat4 transformModel(int idx);
+	mat4 transformModelPlayer(int idx);
 	void setCurrentIDX(int idx);
 	int getCurrentIDX();
 

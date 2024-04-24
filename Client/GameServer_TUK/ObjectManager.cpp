@@ -71,11 +71,21 @@ void ObjectManager::creatBoard(int *idx)
 	}
 }
 
-int ObjectManager::creatPlayer(int* idx)
+Object* ObjectManager::creatPlayer()
 {
-	creatFigure(idx, highp_vec3(0.0f, 0.0f, 0.0f), Figure::PlayerVertex);
+	Object* player = new Object();
 
-	return *idx;
+	for (int i = 0; i < 12; i++) player->m_pos.emplace_back(Figure::PlayerVertex[i]);
+	for (int i = 0; i < 6; i++) player->m_index.emplace_back(Figure::RectIndecies[i]);
+
+	for (int i = 0; i < 4; i++)
+	{
+		player->m_col.emplace_back(0.0f);
+		player->m_col.emplace_back(0.0f);
+		player->m_col.emplace_back(0.0f);
+	}
+
+	return player;
 }
 
 void ObjectManager::setPlayerPosition(int idx, float x, float y)
@@ -169,6 +179,39 @@ mat4 ObjectManager::transformModel(int idx)
 		float scale_x = m_ObjectList[idx]->m_scale.x;
 		float scale_y = m_ObjectList[idx]->m_scale.y;
 		float scale_z = m_ObjectList[idx]->m_scale.z;
+
+		model = glm::mat4(1.0f);
+
+		model = glm::scale(model, glm::vec3(scale_x, scale_y, scale_z));
+		model = glm::rotate(model, glm::radians(rotate_x), glm::vec3(1.0f, 0.0f, 0.0f));
+		model = glm::rotate(model, glm::radians(rotate_y), glm::vec3(0.0f, 1.0f, 0.0f));
+		model = glm::rotate(model, glm::radians(rotate_z), glm::vec3(0.0f, 0.0f, 1.0f));
+		model = glm::translate(model, glm::vec3(move_x, move_y, move_z));
+	}
+
+	return model;
+}
+
+mat4 ObjectManager::transformModelPlayer(int idx)
+{
+	mat4 model = glm::mat4(1.0f);
+	mat4 scale = glm::mat4(1.0f);
+	mat4 rot = glm::mat4(1.0f);
+	mat4 move = glm::mat4(1.0f);
+
+	if (!m_players.empty())
+	{
+		float move_x = m_players[idx]->m_position.x;
+		float move_y = m_players[idx]->m_position.y;
+		float move_z = m_players[idx]->m_position.z;
+
+		float rotate_x = m_players[idx]->m_rotate.x;
+		float rotate_y = m_players[idx]->m_rotate.y;
+		float rotate_z = m_players[idx]->m_rotate.z;
+
+		float scale_x = m_players[idx]->m_scale.x;
+		float scale_y = m_players[idx]->m_scale.y;
+		float scale_z = m_players[idx]->m_scale.z;
 
 		model = glm::mat4(1.0f);
 

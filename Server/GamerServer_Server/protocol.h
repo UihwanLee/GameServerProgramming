@@ -34,14 +34,14 @@ struct SC_LOGIN_INFO_PACKET {
 	unsigned char size;
 	char	type;
 	short	id;
-	short	x, y;
+	float	x, y;
 };
 
 struct SC_ADD_PLAYER_PACKET {
 	unsigned char size;
 	char	type;
 	short	id;
-	short	x, y;
+	float	x, y;
 	char	name[NAME_SIZE];
 };
 
@@ -55,7 +55,7 @@ struct SC_MOVE_PLAYER_PACKET {
 	unsigned char size;
 	char	type;
 	short	id;
-	short	x, y;
+	float	x, y;
 	unsigned int move_time;
 };
 

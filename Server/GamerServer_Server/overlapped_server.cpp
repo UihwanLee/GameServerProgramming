@@ -46,7 +46,7 @@ public:
 	bool _is_active;
 	int _id;
 	SOCKET _socket;
-	short	x, y;
+	float	x, y;
 	char	_name[NAME_SIZE];
 	int		_prev_remain;
 	int		_last_move_time;
@@ -55,7 +55,8 @@ public:
 	{
 		_id = -1;
 		_socket = 0;
-		x = y = 0;
+		x = -3.5f;
+		y = 3.5f;
 		_name[0] = 0;
 		_state = ST_FREE;
 		_is_active = false;
@@ -161,13 +162,13 @@ void process_packet(int c_id, char* packet)
 	case CS_MOVE: {
 		CS_MOVE_PACKET* p = reinterpret_cast<CS_MOVE_PACKET*>(packet);
 		clients[c_id]._last_move_time = p->move_time;
-		short x = clients[c_id].x;
-		short y = clients[c_id].y;
+		float x = clients[c_id].x;
+		float y = clients[c_id].y;
 		switch (p->direction) {
-		case 0: if (y > 0) y--; break;
-		case 1: if (y < W_HEIGHT - 1) y++; break;
-		case 2: if (x > 0) x--; break;
-		case 3: if (x < W_WIDTH - 1) x++; break;
+		case 0: y += 1.0f; break;
+		case 1: y -= 1.0f; break;
+		case 2: x -= 1.0f; break;
+		case 3: x += 1.0f; break;
 		}
 		clients[c_id].x = x;
 		clients[c_id].y = y;
@@ -247,8 +248,8 @@ int main()
 		int client_id = get_new_client_id();
 		if (client_id != -1) {
 			clients[client_id]._state = ST_INGAME;
-			clients[client_id].x = 0;
-			clients[client_id].y = 0;
+			clients[client_id].x = -3.5f;
+			clients[client_id].y = 3.5f;
 			clients[client_id]._id = client_id;
 			clients[client_id]._name[0] = 0;
 			clients[client_id]._prev_remain = 0;
