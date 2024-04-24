@@ -51,5 +51,6 @@
   <ItemGroup>
     <None Include="vertex.glsl" />
     <None Include="fragment.glsl" />
+    <None Include="packages.config" />
   </ItemGroup>
 </Project>

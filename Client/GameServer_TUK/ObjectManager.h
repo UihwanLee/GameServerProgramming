@@ -9,6 +9,7 @@ class ObjectManager
 public:
 	vector<Object*>	m_ObjectList;
 	vector<int> m_playerIDList;
+	unordered_map<int, Object*> m_players;
 	int serverID;
 	int currentIDX;
 
@@ -21,11 +22,12 @@ public:
 	void creatBoard(int* idx);
 
 	int creatPlayer(int* idx);
+	void setPlayerPosition(int idx, float x, float y);
 
 	void setPosition(int idx, float x, float y, float z);
 	void setPosition(int idx, vec3 position);
 
-	void move(int idx, float x, float y, float z);
+	void move(int idx, float x, float y);
 	void move(int idx, vec3 position);
 
 	void reset();

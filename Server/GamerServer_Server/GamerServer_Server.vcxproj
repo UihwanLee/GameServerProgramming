@@ -130,6 +130,7 @@
   <ItemGroup>
     <ClCompile Include="Figure.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="muti_iocp_server.cpp" />
     <ClCompile Include="overlapped_server.cpp" />
   </ItemGroup>
   <ItemGroup>

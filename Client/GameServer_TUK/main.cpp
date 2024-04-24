@@ -4,7 +4,11 @@
 #include <WS2tcpip.h>
 #pragma comment (lib, "WS2_32.LIB")
 
+#include <SFML/Network.hpp>
+
 #include "..\..\Server\GamerServer_Server\protocol.h"
+
+sf::TcpSocket s_socket;
 
 constexpr short PORT = 4000;
 constexpr int BUFSIZE = 256;
@@ -71,6 +75,9 @@ mat4 camera = mat4(1.0f);
 void drawView();
 void drawProjection();
 void drawObjects(int idx);
+void drawPlayers(int idx);
+
+void client_update();
 
 int g_left_x;
 int g_top_y;
@@ -79,68 +86,26 @@ int g_myid;
 // 오브젝트 리스트
 ObjectManager* m_ObjectManager = new ObjectManager();
 
-#pragma pack (push, 1)
-struct packet {
-	short		size;
-	int			type;
-	int			serverID;
-	int			playerPosIDX;
-	bool		isMyID;
-	glm::vec3	pos;
-};
-#pragma pack (pop)
-
 void main(int argc, char** argv)
 {
 	initServer();
 	client(argc, argv);
 }
 
-void send_move_packet(int type);
-
-packet receivedPacket;
-
-void do_recv()
-{
-	wsabuf.len = sizeof(packet);
-	wsabuf.buf = reinterpret_cast<CHAR*>(&receivedPacket);
-	DWORD recv_size;
-	DWORD recv_flag = 0;
-	ZeroMemory(&wsaover, sizeof(wsaover));
-	int res = WSARecv(server_s, &wsabuf, 1, &recv_size, &recv_flag, &wsaover, recv_callback);
-
-	if (0 != res) {
-		int err_no = WSAGetLastError();
-		if (WSA_IO_PENDING != err_no)
-			print_error("WSARecv", WSAGetLastError());
-	}
-}
-
 GLvoid update(int value)
 {
-	// 30 밀리초 마다 CALLBACK 호출 및 서버 recv 함수 호출
-	SleepEx(0, TRUE);
-	do_recv();
+	// 통신 업데이트
+	client_update();
+	
 	glutPostRedisplay();
 	glutTimerFunc(30, update, 1);
 }
 
-void send_move_packet(int type)
+void send_packet(void* packet)
 {
-	receivedPacket.size = sizeof(packet);
-	receivedPacket.type = type;
-	receivedPacket.serverID = m_ObjectManager->getServerID();
-	receivedPacket.playerPosIDX = m_ObjectManager->getCurrentIDX();
-	receivedPacket.pos = glm::vec3(0.0f, 0.0f, 0.0f);
-
-	wsabuf.len = sizeof(packet);
-	wsabuf.buf = reinterpret_cast<CHAR*>(&receivedPacket);
-	if (wsabuf.len == 1) {
-		bshutdown = true;
-		return;
-	}
-	ZeroMemory(&wsaover, sizeof(wsaover));
-	WSASend(server_s, &wsabuf, 1, nullptr, 0, &wsaover, send_callback);
+	unsigned char* p = reinterpret_cast<unsigned char*>(packet);
+	size_t sent = 0;
+	s_socket.send(packet, p[0], sent);
 }
 
 void print_error(const char* msg, int err_no)
@@ -157,30 +122,6 @@ void print_error(const char* msg, int err_no)
 	LocalFree(msg_buf);
 }
 
-void CALLBACK recv_callback(DWORD err, DWORD recv_size,
-	LPWSAOVERLAPPED pwsaover, DWORD sendflag)
-{
-	if (0 != err) {
-		print_error("WSARecv", WSAGetLastError());
-	}
-
-	// 서버에서 받은 데이터로 수행하는 함수 판단
-	check_packet();
-
-	glutPostRedisplay();
-}
-
-void CALLBACK send_callback(DWORD err, DWORD sent_size,
-	LPWSAOVERLAPPED pwsaover, DWORD sendflag)
-{
-	wsabuf.len = sizeof(packet);
-	DWORD recv_flag = 0;
-	ZeroMemory(pwsaover, sizeof(*pwsaover));
-	WSARecv(server_s, &wsabuf, 1, nullptr, &recv_flag, pwsaover, recv_callback);
-
-	//std::cout << "[Client] recevicepacket tpye: " << receivedPacket.type << "번" << std::endl;
-}
-
 void ProcessPacket(char* ptr)
 {
 	static bool first_time = true;
@@ -189,8 +130,12 @@ void ProcessPacket(char* ptr)
 	case SC_LOGIN_INFO:
 	{
 		SC_LOGIN_INFO_PACKET* packet = reinterpret_cast<SC_LOGIN_INFO_PACKET*>(ptr);
+		std::cout << "[클라이언트 접속]" << std::endl;
+		m_ObjectManager->creatPlayer(&playerID);
+		m_ObjectManager->setPlayerPosition(playerID, packet->x, packet->y);
+
 		g_myid = packet->id;
-		m_ObjectManager->setPosition(0, vec3(packet->x, packet->y, 0));
+		//m_ObjectManager->setPosition(0, vec3(packet->x, packet->y, 0));
 		//avatar.m_x = packet->x;
 		//avatar.m_y = packet->y;
 		g_left_x = packet->x - 8;
@@ -205,14 +150,14 @@ void ProcessPacket(char* ptr)
 		int id = my_packet->id;
 
 		if (id == g_myid) {
-			m_ObjectManager->setPosition(0, vec3(my_packet->x, my_packet->y, 0));
+			m_ObjectManager->setPlayerPosition(0, my_packet->x, my_packet->y);
 			//avatar.move(my_packet->x, my_packet->y);
 			g_left_x = my_packet->x - 4;
 			g_top_y = my_packet->y - 4;
 			//avatar.show();
 		}
 		else if (id < MAX_USER) {
-			m_ObjectManager->setPosition(0, vec3(my_packet->x, my_packet->y, 0));
+			m_ObjectManager->setPlayerPosition(0, my_packet->x, my_packet->y);
 			//players[id] = OBJECT{ *pieces, 0, 0, 64, 64 };
 			//players[id].move(my_packet->x, my_packet->y);
 			//players[id].set_name(my_packet->name);
@@ -230,13 +175,13 @@ void ProcessPacket(char* ptr)
 		SC_MOVE_PLAYER_PACKET* my_packet = reinterpret_cast<SC_MOVE_PLAYER_PACKET*>(ptr);
 		int other_id = my_packet->id;
 		if (other_id == g_myid) {
-			m_ObjectManager->setPosition(0, vec3(my_packet->x, my_packet->y, 0));
+			m_ObjectManager->move(0, my_packet->x, my_packet->y);
 			//avatar.move(my_packet->x, my_packet->y);
 			g_left_x = my_packet->x - 8;
 			g_top_y = my_packet->y - 8;
 		}
 		else if (other_id < MAX_USER) {
-			m_ObjectManager->setPosition(other_id, vec3(my_packet->x, my_packet->y, 0));
+			m_ObjectManager->move(other_id, my_packet->x, my_packet->y);
 			//players[other_id].move(my_packet->x, my_packet->y);
 		}
 		else {
@@ -254,6 +199,7 @@ void ProcessPacket(char* ptr)
 			//avatar.hide();
 		}
 		else if (other_id < MAX_USER) {
+			m_ObjectManager->m_players.erase(other_id);
 			//players.erase(other_id);
 		}
 		else {
@@ -291,34 +237,46 @@ void process_data(char* net_buf, size_t io_byte)
 	}
 }
 
+GLvoid client_update()
+{
+	char net_buf[BUF_SIZE];
+	size_t	received;
+
+	auto recv_result = s_socket.receive(net_buf, BUF_SIZE, received);
+	if (recv_result == sf::Socket::Error)
+	{
+		wcout << L"Recv 에러!";
+		exit(-1);
+	}
+	if (recv_result == sf::Socket::Disconnected) {
+		wcout << L"Disconnected\n";
+		exit(-1);
+	}
+	if (recv_result != sf::Socket::NotReady)
+		if (received > 0) process_data(net_buf, received);
+}
+
 GLvoid initServer()
 {
-	// Overlapped I/O callback으로 서버 연결
+	wcout.imbue(locale("korean"));
+	sf::Socket::Status status = s_socket.connect("127.0.0.1", PORT_NUM);
+	s_socket.setBlocking(false);
 
-	std::wcout.imbue(std::locale("korean"));
-
-	// window 네트워크 프로그래밍 시 옛날에 만든 프로그램과의 호환성을 위해 필요
-	WSADATA WSAData;
-	WSAStartup(MAKEWORD(2, 0), &WSAData);
-
-	// SOCKET 생성
-	server_s = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, nullptr, 0, WSA_FLAG_OVERLAPPED);
-
-	// SOCK ADDR 생성
-	SOCKADDR_IN server_a;
-	server_a.sin_family = AF_INET;
-	server_a.sin_port = htons(PORT);
-	inet_pton(AF_INET, SERVER_ADDR, &server_a.sin_addr);
-
-	if (connect(server_s, reinterpret_cast<sockaddr*>(&server_a), sizeof(server_a)) == SOCKET_ERROR)
-	{
-		std::cerr << "Failed to connect to server.\n";
-		closesocket(server_s);
-		WSACleanup();
-		return;
+	if (status != sf::Socket::Done) {
+		wcout << L"서버와 연결할 수 없습니다.\n";
+		exit(-1);
 	}
 
-	std::cout << "[Client] 클라이언트 서버 접속 성공" << std::endl;
+	// 서버에 플레이어 로그인 요청
+	CS_LOGIN_PACKET p;
+	p.size = sizeof(p);
+	p.type = CS_LOGIN;
+
+	string player_name{ "P" };
+	player_name += to_string(GetCurrentProcessId());
+
+	strcpy_s(p.name, player_name.c_str());
+	send_packet(&p);
 }
 
 GLvoid client(int argc, char** argv)
@@ -372,9 +330,6 @@ GLvoid initObjects()
 
 	// 체스판 생성
 	m_ObjectManager->creatBoard(&idx);
-
-	// 서버에 플레이어 생성 요청
-	send_move_packet(0);
 
 	// 카메라 세팅
 	camera = glm::translate(camera, glm::vec3(0.0f, 0.0f, -10.0f));
@@ -464,6 +419,13 @@ GLvoid render()
 			drawObjects(i);
 		}
 	}
+	for (int i = 0; i < m_ObjectManager->m_players.size(); i++)
+	{
+		if (m_ObjectManager->m_players[i]->isActive())
+		{
+			drawPlayers(i);
+		}
+	}
 
 	glutSwapBuffers();
 }
@@ -520,6 +482,35 @@ void drawObjects(int idx)
 	glDisableVertexAttribArray(1);
 }
 
+void drawPlayers(int idx)
+{
+	// Model
+	unsigned int modelLocation = glGetUniformLocation(shaderProgramID, "modelTransform");
+	m_ObjectManager->m_players[idx]->m_model = m_ObjectManager->transformModel(idx);
+	glUniformMatrix4fv(modelLocation, 1, GL_FALSE, glm::value_ptr(m_ObjectManager->m_players[idx]->m_model));
+
+	// Position / Color
+	glBindBuffer(GL_ARRAY_BUFFER, VBO[0]);
+	glBufferData(GL_ARRAY_BUFFER, m_ObjectManager->m_players[idx]->m_pos.size() * sizeof(GLfloat), &m_ObjectManager->m_players[idx]->m_pos[0], GL_STATIC_DRAW);
+
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_ObjectManager->m_players[idx]->m_index.size() * sizeof(GLfloat), &m_ObjectManager->m_players[idx]->m_index[0], GL_STATIC_DRAW);
+
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), 0);
+
+	glBindBuffer(GL_ARRAY_BUFFER, VBO[1]);
+	glBufferData(GL_ARRAY_BUFFER, m_ObjectManager->m_players[idx]->m_col.size() * sizeof(GLfloat), &m_ObjectManager->m_players[idx]->m_col[0], GL_STATIC_DRAW);
+
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), 0);
+
+	glDrawElements(GL_TRIANGLES, m_ObjectManager->m_players[idx]->m_index.size(), GL_UNSIGNED_INT, 0);
+
+	glDisableVertexAttribArray(0);
+	glDisableVertexAttribArray(1);
+}
+
 void keyBoard(unsigned char key, int x, int y)
 {
 	// 키보드 입력
@@ -538,77 +529,30 @@ void keyBoard(unsigned char key, int x, int y)
 	}
 }
 
-void check_packet()
-{
-	// 서버에서 받아온 packet의 type을 확인하여 적절한 함수를 실행
-	if (receivedPacket.type == 0)
-	{
-		create_player();
-	}
-	else if (receivedPacket.type >= 1 && receivedPacket.type <= 4)
-	{
-		move_player();
-	}
-}
-
-void create_player()
-{
-	// 초기 플레이어를 생성한다.
-	m_ObjectManager->setCurrentIDX(receivedPacket.playerPosIDX);
-	playerID = m_ObjectManager->creatPlayer(&idx);
-	m_ObjectManager->setPosition(playerID, receivedPacket.pos);
-
-	// 서버로부터 받은 서버 아이디를 세팅한다
-	if(receivedPacket.isMyID)
-		m_ObjectManager->setServerID(playerID);
-
-
-	std::cout << "[Client" << m_ObjectManager->getServerID() << "]: 서버로 부터 요청받아 자신의 플레이 말 생성!" << std::endl;
-}
-
-void create_other_player()
-{
-	std::cout << "[Client" << m_ObjectManager->getServerID() << "]: 서버로 부터 요청받아 다른 플레이 말 생성!" << std::endl;
-
-	// 자신의 플레이어를 생성하기 전 서버에 저장되어 있는 다른 플레이어 생성
-	m_ObjectManager->setCurrentIDX(receivedPacket.playerPosIDX);
-	playerID = m_ObjectManager->creatPlayer(&idx);
-	m_ObjectManager->setPosition(playerID, receivedPacket.pos);
-}
-
-void move_player()
-{
-	// 플레이어의 말을 움직이는 함수
-
-	if (receivedPacket.pos == glm::vec3(0.0f, 0.0f, 0.0f))
-	{
-		std::cout << "ERROR: POS가 0,0,0 임!" << std::endl;
-		return;
-	}
-
-	cout << receivedPacket.serverID << "번 IDX 말 이동" << endl;
-
-	// 서버에서 받은 Position으로 말 이동
-	m_ObjectManager->setPosition(receivedPacket.serverID, receivedPacket.pos);
-	m_ObjectManager->setCurrentIDX(receivedPacket.playerPosIDX);
-}
-
 void specialKeyBoard(int key, int x, int y)
 {
+	int direction = -1;
 	// 스페설 키보드 입력 처리
 	switch (key) {
 	case GLUT_KEY_LEFT:
-		send_move_packet(1);
+		direction = 2;
 		break;
 	case GLUT_KEY_RIGHT:
-		send_move_packet(2);
+		direction = 3;
 		break;
 	case GLUT_KEY_UP:
-		send_move_packet(3);
+		direction = 0;
 		break;
 	case GLUT_KEY_DOWN:
-		send_move_packet(4);
+		direction = 1;
 		break;
+	}
+	if (-1 != direction) {
+		CS_MOVE_PACKET p;
+		p.size = sizeof(p);
+		p.type = CS_MOVE;
+		p.direction = direction;
+		send_packet(&p);
 	}
 	glutPostRedisplay();
 }

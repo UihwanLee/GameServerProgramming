@@ -74,17 +74,15 @@ void ObjectManager::creatBoard(int *idx)
 int ObjectManager::creatPlayer(int* idx)
 {
 	creatFigure(idx, highp_vec3(0.0f, 0.0f, 0.0f), Figure::PlayerVertex);
-	setPosition(*idx, Figure::Boards[currentIDX]);
-	setChild(*idx, *idx + 1);
-	setChild(*idx, *idx + 2);
 
-	creatFigure(idx, highp_vec3(0.0f, 0.0f, 0.0f), Figure::PlayerVertex2);
-	setPosition(*idx, Figure::Boards[currentIDX]);
+	return *idx;
+}
 
-	creatFigure(idx, highp_vec3(0.0f, 0.0f, 0.0f), Figure::PlayerVertex3);
-	setPosition(*idx, Figure::Boards[currentIDX]);
+void ObjectManager::setPlayerPosition(int idx, float x, float y)
+{
+	if (m_players.empty()) return;
 
-	return *idx-2;
+	m_players[idx]->setPosition(x, y, 0);
 }
 
 void ObjectManager::setPosition(int idx, float x, float y, float z)
@@ -115,18 +113,11 @@ void ObjectManager::setPosition(int idx, vec3 position)
 	}
 }
 
-void ObjectManager::move(int idx, float x, float y, float z)
+void ObjectManager::move(int idx, float x, float y)
 {
-	if (m_ObjectList.empty()) return;
+	if (m_players.empty()) return;
 
-	m_ObjectList[idx]->move(x, y, z);
-
-	// 자식이 존재한다면 자식에게도 적용
-	if (!m_ObjectList[idx]->childs.empty()) {
-		for (int i = 0; i < m_ObjectList[idx]->childs.size(); i++) {
-			m_ObjectList[m_ObjectList[idx]->childs[i]]->move(x, y, z);
-		}
-	}
+	m_players[idx]->move(x, y, 0);
 }
 
 void ObjectManager::move(int idx, vec3 position)
