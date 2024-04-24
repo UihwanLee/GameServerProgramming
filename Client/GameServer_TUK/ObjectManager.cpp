@@ -56,18 +56,22 @@ void ObjectManager::creatBoard(int *idx)
 {
 	// 체스판 만들기
 	int index;
-	for (const auto& board : Figure::Boards)
+	for (int i=0; i< 100; i++)
 	{
-		index = *idx + 1;
-		if ((index / 8) % 2 == 0)
+		for (int j = 0; j < 100; j++)
 		{
-			createRect(idx, (*idx % 2 != 0) ? Figure::boardColorType1 : Figure::boardColorType2);
+			vec3 pos = vec3(i, -j, 0.0f);
+			index = *idx + 1;
+			if ((index / 8) % 2 == 0)
+			{
+				createRect(idx, (*idx % 2 != 0) ? Figure::boardColorType1 : Figure::boardColorType2);
+			}
+			else
+			{
+				createRect(idx, (*idx % 2 == 0) ? Figure::boardColorType1 : Figure::boardColorType2);
+			}
+			setPosition(*idx, pos);
 		}
-		else
-		{
-			createRect(idx, (*idx % 2 == 0) ? Figure::boardColorType1 : Figure::boardColorType2);
-		}
-		setPosition(*idx, board);
 	}
 }
 
