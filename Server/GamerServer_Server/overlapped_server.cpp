@@ -47,6 +47,7 @@ public:
 	int _id;
 	SOCKET _socket;
 	float	x, y;
+	float	cx, cy;
 	char	_name[NAME_SIZE];
 	int		_prev_remain;
 	int		_last_move_time;
@@ -57,6 +58,8 @@ public:
 		_socket = 0;
 		x = -3.5f;
 		y = 3.5f;
+		cx = 3.5f;
+		cy = -3.5f;
 		_name[0] = 0;
 		_state = ST_FREE;
 		_is_active = false;
@@ -92,6 +95,8 @@ public:
 		p.type = SC_LOGIN_INFO;
 		p.x = x;
 		p.y = y;
+		p.cx = cx;
+		p.cy = cy;
 		do_send(&p);
 	}
 	void send_move_packet(int c_id);
@@ -119,6 +124,8 @@ void SESSION::send_move_packet(int c_id)
 	p.type = SC_MOVE_PLAYER;
 	p.x = clients[c_id].x;
 	p.y = clients[c_id].y;
+	p.cx = clients[c_id].cx;
+	p.cy = clients[c_id].cy;
 	p.move_time = clients[c_id]._last_move_time;
 	do_send(&p);
 }
@@ -164,14 +171,18 @@ void process_packet(int c_id, char* packet)
 		clients[c_id]._last_move_time = p->move_time;
 		float x = clients[c_id].x;
 		float y = clients[c_id].y;
+		float cx = clients[c_id].cx;
+		float cy = clients[c_id].cy;
 		switch (p->direction) {
-		case 0: y += 1.0f; break;
-		case 1: y -= 1.0f; break;
-		case 2: x -= 1.0f; break;
-		case 3: x += 1.0f; break;
+		case 0: { y += 1.0f; cx = 0.0f; cy = -1.0f; break; }
+		case 1: { y -= 1.0f; cx = 0.0f; cy = 1.0f; break; }
+		case 2: { x -= 1.0f; cx = 1.0f; cy = 0.0f; break; }
+		case 3: { x += 1.0f; cx = -1.0f; cy = 0.0f; break; }
 		}
 		clients[c_id].x = x;
 		clients[c_id].y = y;
+		clients[c_id].cx = cx;
+		clients[c_id].cy = cy;
 
 		for (auto& cl : clients) {
 			if (cl._state != ST_INGAME) continue;
@@ -250,6 +261,8 @@ int main()
 			clients[client_id]._state = ST_INGAME;
 			clients[client_id].x = -3.5f;
 			clients[client_id].y = 3.5f;
+			clients[client_id].cx = 3.5f;
+			clients[client_id].cy = -3.5f;
 			clients[client_id]._id = client_id;
 			clients[client_id]._name[0] = 0;
 			clients[client_id]._prev_remain = 0;

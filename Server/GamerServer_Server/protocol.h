@@ -35,6 +35,7 @@ struct SC_LOGIN_INFO_PACKET {
 	char	type;
 	short	id;
 	float	x, y;
+	float	cx, cy;
 };
 
 struct SC_ADD_PLAYER_PACKET {
@@ -56,6 +57,7 @@ struct SC_MOVE_PLAYER_PACKET {
 	char	type;
 	short	id;
 	float	x, y;
+	float   cx, cy;
 	unsigned int move_time;
 };
 

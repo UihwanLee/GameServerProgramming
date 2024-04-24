@@ -22,19 +22,108 @@ WSABUF wsabuf;
 WSAOVERLAPPED wsaover;
 bool bshutdown = false;
 
-void CALLBACK send_callback(DWORD error, DWORD sent_size,
-	LPWSAOVERLAPPED pwsaover, DWORD sendflag);
+int g_left_x;
+int g_top_y;
+int g_myid;
 
-void CALLBACK recv_callback(DWORD error, DWORD recv_size,
-	LPWSAOVERLAPPED pwsaover, DWORD sendflag);
+// 오브젝트 리스트
+ObjectManager* m_ObjectManager = new ObjectManager();
 
-// 클라이언트 행동 함수
-void check_packet();
-void create_player();
-void move_player();
-void create_other_player();
+// 카메라
+mat4 camera = mat4(1.0f);
 
 void print_error(const char* msg, int err_no);
+
+void ProcessPacket(char* ptr)
+{
+	static bool first_time = true;
+	switch (ptr[1])
+	{
+	case SC_LOGIN_INFO:
+	{
+		SC_LOGIN_INFO_PACKET* packet = reinterpret_cast<SC_LOGIN_INFO_PACKET*>(ptr);
+		std::cout << "[클라이언트 로그인" << std::endl;
+		std::cout << "[플레이어 이동]" << packet->x << ", " << packet->y << std::endl;
+		m_ObjectManager->m_players[packet->id] = m_ObjectManager->creatPlayer();
+		m_ObjectManager->setPlayerPosition(packet->id, packet->x, packet->y);
+		camera = glm::translate(camera, glm::vec3(packet->cx, packet->cy, 0.0f));
+
+		g_myid = packet->id;
+		g_left_x = packet->x - 8;
+		g_top_y = packet->y - 8;
+		//avatar.show();
+	}
+	break;
+
+	case SC_ADD_PLAYER:
+	{
+		SC_ADD_PLAYER_PACKET* my_packet = reinterpret_cast<SC_ADD_PLAYER_PACKET*>(ptr);
+		int id = my_packet->id;
+
+		if (id == g_myid) {
+			m_ObjectManager->setPlayerPosition(g_myid, my_packet->x, my_packet->y);
+			//avatar.move(my_packet->x, my_packet->y);
+			g_left_x = my_packet->x - 4;
+			g_top_y = my_packet->y - 4;
+			//avatar.show();
+		}
+		else if (id < MAX_USER) {
+			m_ObjectManager->m_players[id] = m_ObjectManager->creatPlayer();
+			m_ObjectManager->setPlayerPosition(id, my_packet->x, my_packet->y);
+			//players[id] = OBJECT{ *pieces, 0, 0, 64, 64 };
+			//players[id].move(my_packet->x, my_packet->y);
+			//players[id].set_name(my_packet->name);
+			//players[id].show();
+		}
+		else {
+			//npc[id - NPC_START].x = my_packet->x;
+			//npc[id - NPC_START].y = my_packet->y;
+			//npc[id - NPC_START].attr |= BOB_ATTR_VISIBLE;
+		}
+		break;
+	}
+	case SC_MOVE_PLAYER:
+	{
+		SC_MOVE_PLAYER_PACKET* my_packet = reinterpret_cast<SC_MOVE_PLAYER_PACKET*>(ptr);
+		int other_id = my_packet->id;
+		if (other_id == g_myid) {
+			camera = glm::translate(camera, glm::vec3(my_packet->cx, my_packet->cy, 0.0f));
+			m_ObjectManager->setPlayerPosition(g_myid, my_packet->x, my_packet->y);
+			//avatar.move(my_packet->x, my_packet->y);
+			g_left_x = my_packet->x - 8;
+			g_top_y = my_packet->y - 8;
+		}
+		else if (other_id < MAX_USER) {
+			m_ObjectManager->setPlayerPosition(other_id, my_packet->x, my_packet->y);
+			//players[other_id].move(my_packet->x, my_packet->y);
+		}
+		else {
+			//npc[other_id - NPC_START].x = my_packet->x;
+			//npc[other_id - NPC_START].y = my_packet->y;
+		}
+		break;
+	}
+
+	case SC_REMOVE_PLAYER:
+	{
+		SC_REMOVE_PLAYER_PACKET* my_packet = reinterpret_cast<SC_REMOVE_PLAYER_PACKET*>(ptr);
+		int other_id = my_packet->id;
+		if (other_id == g_myid) {
+			//avatar.hide();
+		}
+		else if (other_id < MAX_USER) {
+			m_ObjectManager->m_players.erase(other_id);
+			//players.erase(other_id);
+		}
+		else {
+			//		npc[other_id - NPC_START].attr &= ~BOB_ATTR_VISIBLE;
+		}
+		break;
+	}
+	default:
+		printf("Unknown PACKET type [%d]\n", ptr[1]);
+	}
+}
 
 SOCKET server_s;
 char buf[BUFSIZE];
@@ -68,9 +157,6 @@ GLvoid initObjects();
 int idx = -1;
 int playerID = -1;
 
-// 카메라
-mat4 camera = mat4(1.0f);
-
 // 삼각형 그리기 함수
 void drawView();
 void drawProjection();
@@ -78,13 +164,6 @@ void drawObjects(int idx);
 void drawPlayers(int idx);
 
 void client_update();
-
-int g_left_x;
-int g_top_y;
-int g_myid;
-
-// 오브젝트 리스트
-ObjectManager* m_ObjectManager = new ObjectManager();
 
 void main(int argc, char** argv)
 {
@@ -120,100 +199,6 @@ void print_error(const char* msg, int err_no)
 	std::wcout << L": 에러 : " << msg_buf;
 	while (true);
 	LocalFree(msg_buf);
-}
-
-void ProcessPacket(char* ptr)
-{
-	static bool first_time = true;
-	switch (ptr[1])
-	{
-	case SC_LOGIN_INFO:
-	{
-		SC_LOGIN_INFO_PACKET* packet = reinterpret_cast<SC_LOGIN_INFO_PACKET*>(ptr);
-		std::cout << "[클라이언트 로그인" << std::endl;
-		std::cout << "[플레이어 이동]" << packet->x << ", " << packet->y << std::endl;
-		m_ObjectManager->m_players[packet->id] = m_ObjectManager->creatPlayer();
-		//m_ObjectManager->setPlayerPosition(playerID, packet->x, packet->y);
-
-		g_myid = packet->id;
-		g_left_x = packet->x - 8;
-		g_top_y = packet->y - 8;
-		//avatar.show();
-	}
-	break;
-
-	case SC_ADD_PLAYER:
-	{
-		SC_ADD_PLAYER_PACKET* my_packet = reinterpret_cast<SC_ADD_PLAYER_PACKET*>(ptr);
-		int id = my_packet->id;
-
-		if (id == g_myid) {
-			std::cout << "[플레이어 추가" << std::endl;
-			m_ObjectManager->setPlayerPosition(g_myid, my_packet->x, my_packet->y);
-			//avatar.move(my_packet->x, my_packet->y);
-			g_left_x = my_packet->x - 4;
-			g_top_y = my_packet->y - 4;
-			//avatar.show();
-		}
-		else if (id < MAX_USER) {
-			std::cout << "다른 플레이어 추가" << std::endl;
-			m_ObjectManager->m_players[id] = m_ObjectManager->creatPlayer();
-			m_ObjectManager->setPlayerPosition(id, my_packet->x, my_packet->y);
-			//players[id] = OBJECT{ *pieces, 0, 0, 64, 64 };
-			//players[id].move(my_packet->x, my_packet->y);
-			//players[id].set_name(my_packet->name);
-			//players[id].show();
-		}
-		else {
-			//npc[id - NPC_START].x = my_packet->x;
-			//npc[id - NPC_START].y = my_packet->y;
-			//npc[id - NPC_START].attr |= BOB_ATTR_VISIBLE;
-		}
-		break;
-	}
-	case SC_MOVE_PLAYER:
-	{
-		SC_MOVE_PLAYER_PACKET* my_packet = reinterpret_cast<SC_MOVE_PLAYER_PACKET*>(ptr);
-		std::cout << "[플레이어 이동]" << my_packet->x << ", " << my_packet->y << std::endl;
-		int other_id = my_packet->id;
-		if (other_id == g_myid) {
-			m_ObjectManager->setPlayerPosition(g_myid, my_packet->x, my_packet->y);
-			//avatar.move(my_packet->x, my_packet->y);
-			g_left_x = my_packet->x - 8;
-			g_top_y = my_packet->y - 8;
-		}
-		else if (other_id < MAX_USER) {
-			std::cout << "다른 플레이어 이동" << std::endl;
-			m_ObjectManager->setPlayerPosition(other_id, my_packet->x, my_packet->y);
-			//players[other_id].move(my_packet->x, my_packet->y);
-		}
-		else {
-			std::cout << "예외" << std::endl;
-			//npc[other_id - NPC_START].x = my_packet->x;
-			//npc[other_id - NPC_START].y = my_packet->y;
-		}
-		break;
-	}
-
-	case SC_REMOVE_PLAYER:
-	{
-		SC_REMOVE_PLAYER_PACKET* my_packet = reinterpret_cast<SC_REMOVE_PLAYER_PACKET*>(ptr);
-		int other_id = my_packet->id;
-		if (other_id == g_myid) {
-			//avatar.hide();
-		}
-		else if (other_id < MAX_USER) {
-			m_ObjectManager->m_players.erase(other_id);
-			//players.erase(other_id);
-		}
-		else {
-			//		npc[other_id - NPC_START].attr &= ~BOB_ATTR_VISIBLE;
-		}
-		break;
-	}
-	default:
-		printf("Unknown PACKET type [%d]\n", ptr[1]);
-	}
 }
 
 void process_data(char* net_buf, size_t io_byte)
