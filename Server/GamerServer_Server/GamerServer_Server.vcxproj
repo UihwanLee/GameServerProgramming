@@ -129,10 +129,11 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Figure.cpp" />
-    <ClCompile Include="main.cpp" />
     <ClCompile Include="muti_iocp_server.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </ClCompile>
+    <ClCompile Include="non_blocking_server.cpp" />
     <ClCompile Include="overlapped_server.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">true</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>

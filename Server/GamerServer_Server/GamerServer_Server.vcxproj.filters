@@ -15,9 +15,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="main.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
     <ClCompile Include="Figure.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
@@ -28,6 +25,9 @@
       <Filter>소스 파일</Filter>
     </ClCompile>
     <ClCompile Include="single_iocp_server.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="non_blocking_server.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>

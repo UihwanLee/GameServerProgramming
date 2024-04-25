@@ -248,6 +248,10 @@ int main()
 			continue;
 		}
 
+		// 소켓을 non-blocking으로 설정
+		u_long mode = 1;
+		ioctlsocket(c_socket, FIONBIO, &mode);
+
 		switch (ex_over->_comp_type) {
 		case OP_ACCEPT: {
 			int client_id = get_new_client_id();
@@ -265,6 +269,10 @@ int main()
 					h_iocp, client_id, 0);
 				clients[client_id].do_recv();
 				c_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
+
+				// 소켓을 non-blocking으로 설정
+				u_long mode = 1;
+				ioctlsocket(c_socket, FIONBIO, &mode);
 			}
 			else {
 				cout << "Max user exceeded.\n";
