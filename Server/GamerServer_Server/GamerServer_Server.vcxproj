@@ -132,6 +132,7 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="muti_iocp_server.cpp" />
     <ClCompile Include="overlapped_server.cpp" />
+    <ClCompile Include="single_iocp_server.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Figure.h" />
