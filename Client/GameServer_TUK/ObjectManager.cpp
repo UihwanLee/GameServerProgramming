@@ -62,13 +62,13 @@ void ObjectManager::creatBoard(int *idx)
 		{
 			vec3 pos = vec3(i, -j, 0.0f);
 			index = *idx + 1;
-			if ((index / 8) % 2 == 0)
+			if ((i % 2 == 0 && j % 2 == 0) || (i % 2 != 0 && j % 2 != 0))
 			{
-				createRect(idx, (*idx % 2 != 0) ? Figure::boardColorType1 : Figure::boardColorType2);
+				createRect(idx, Figure::boardColorType1);
 			}
 			else
 			{
-				createRect(idx, (*idx % 2 == 0) ? Figure::boardColorType1 : Figure::boardColorType2);
+				createRect(idx, Figure::boardColorType2);
 			}
 			setPosition(*idx, pos);
 		}
