@@ -212,13 +212,13 @@ void process_packet(int c_id, char* packet)
 		clients[c_id].cx = cx;
 		clients[c_id].cy = cy;
 
-		for (auto& cl : clients) {
+		/*for (auto& cl : clients) {
 			if (cl._state != ST_INGAME) continue;
 			cl.send_move_packet(c_id);
 
-		}
+		}*/
 
-		/*clients[c_id]._vl_l.lock();
+		clients[c_id]._vl_l.lock();
 		unordered_set<int> old_viewlist = clients[c_id].view_list;
 		clients[c_id]._vl_l.unlock();
 		unordered_set<int> new_viewlist;
@@ -246,7 +246,7 @@ void process_packet(int c_id, char* packet)
 				clients[c_id].send_remove_player_packet(p_id);
 				clients[p_id].send_remove_player_packet(c_id);
 			}
-		}*/
+		}
 	}
 	}
 }

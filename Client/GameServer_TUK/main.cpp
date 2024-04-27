@@ -319,7 +319,7 @@ GLvoid initObjects()
 	m_ObjectManager->creatBoard(&idx);
 
 	// 카메라 세팅
-	camera = glm::translate(camera, glm::vec3(0.0f, 0.0f, -10.0f));
+	camera = glm::translate(camera, glm::vec3(0.0f, 0.0f, -16.0f));
 }
 
 char* getBuf(const char* file)
