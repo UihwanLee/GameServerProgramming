@@ -51,6 +51,8 @@ public:
 	float	x, y;
 	float	cx, cy;
 	char	_name[NAME_SIZE];
+	int		sector_x;
+	int		sector_y;
 	unordered_set<int> view_list;
 	mutex	_vl_l;
 
@@ -116,6 +118,88 @@ array<SESSION, MAX_USER> clients;
 SOCKET g_s_socket, g_c_socket;
 OVER_EXP g_a_over;
 
+const int MAX_ROW = 10; // 최대 SESSION 수
+const int MAX_COL = 10;  // 최대 USER 수
+
+mutex g_sector;
+unordered_set<int> g_ObjectListSector[MAX_ROW][MAX_COL];
+
+void get_best_sector(int* w, int* h)
+{
+	// sector 중 client가 가장 적은 sector w, h 반환
+	int min_client = MAX_USER;
+	for (int i = 0; i < MAX_ROW; i++)
+	{
+		for (int j = 0; j < MAX_COL; j++)
+		{
+			if (g_ObjectListSector[i][j].size() < min_client)
+			{
+				std::cout << g_ObjectListSector[i][j].size() << std::endl;
+				min_client = g_ObjectListSector[i][j].size();
+				*w = i * 10;
+				*h = j * 10;
+			}
+		}
+	}
+}
+
+unordered_set<int>& find_sector(int row, int col) {
+	// sector 내 존재하는 client 리스트 반환
+	if (row < 0) row = 0;
+	if (row >= MAX_ROW) row = MAX_ROW - 1;
+	if (col < 0) col = 0;
+	if (col >= MAX_COL) col = MAX_COL - 1;
+
+	return g_ObjectListSector[row][col];
+}
+
+void init_sector(int id, int x, int y)
+{
+	// 초기화 된 position에 따라 g_ObjectListSector 업데이트
+	int idx_x = x / MAX_ROW;
+	int idx_y = y / MAX_COL;
+
+	if (idx_x < 0) idx_x = 0;
+	if (idx_x >= MAX_ROW) idx_x = MAX_ROW - 1;
+
+	if (idx_y < 0) idx_y = 0;
+	if (idx_y >= MAX_COL) idx_y = MAX_COL - 1;
+
+	clients[id].sector_x = idx_x;
+	clients[id].sector_y = idx_y;
+
+	g_ObjectListSector[idx_x][idx_y].insert(id);
+}
+
+void update_sector(int id, int x, int y)
+{
+	// 이동 된 position에 따라 g_ObjectListSector 업데이트
+	int idx_x = x / MAX_ROW;
+	int idx_y = y / MAX_COL;
+
+	if (idx_x < 0) idx_x = 0;
+	if (idx_x >= MAX_ROW) idx_x = MAX_ROW - 1;
+
+	if (idx_y < 0) idx_y = 0;
+	if (idx_y >= MAX_COL) idx_y = MAX_COL - 1;
+
+	// sector 변환이 없다면 그대로 두고 있다면 갱신
+	// 갱신이 된다면 기존 sector에서 자기 정보를 삭제 / 새로운 sector에 자기 자신 업데이트
+	if (idx_x != clients[id].sector_x)
+	{
+		g_ObjectListSector[clients[id].sector_x][idx_y].erase(id);
+		clients[id].sector_x = idx_x;
+		g_ObjectListSector[idx_x][idx_y].insert(id);
+	}
+	else if (idx_y != clients[id].sector_y)
+	{
+		g_ObjectListSector[idx_x][clients[id].sector_y].erase(id);
+		clients[id].sector_y = idx_y;
+
+		g_ObjectListSector[idx_x][idx_y].insert(id);
+	}
+}
+
 bool can_see(int a, int b)
 {
 	int dist = (clients[a].x - clients[b].x) * (clients[a].x - clients[b].x) +
@@ -171,8 +255,13 @@ void process_packet(int c_id, char* packet)
 	case CS_LOGIN: {
 		CS_LOGIN_PACKET* p = reinterpret_cast<CS_LOGIN_PACKET*>(packet);
 		strcpy_s(clients[c_id]._name, p->name);
-		clients[c_id].x = rand() % W_WIDTH;
-		clients[c_id].y = rand() & W_HEIGHT;
+		int sector_x = 10;
+		int sector_y = 10;
+		get_best_sector(&sector_x, &sector_y);
+		int pos_x = sector_x;
+		int pos_y = sector_y;
+		clients[c_id].x = pos_x;
+		clients[c_id].y = pos_y;
 		clients[c_id].y = clients[c_id].y * -1.0f;
 		clients[c_id].cx = clients[c_id].x * -1.0f;
 		clients[c_id].cy = clients[c_id].y * -1.0f;
@@ -190,6 +279,10 @@ void process_packet(int c_id, char* packet)
 			pl.send_add_player_packet(c_id);
 			clients[c_id].send_add_player_packet(pl._id);
 		}
+
+		// 로그인 시 sector 배정
+		init_sector(c_id, pos_x, pos_y);
+
 		break;
 	}
 	case CS_MOVE: {
@@ -212,23 +305,30 @@ void process_packet(int c_id, char* packet)
 		clients[c_id].cx = cx;
 		clients[c_id].cy = cy;
 
-		/*for (auto& cl : clients) {
-			if (cl._state != ST_INGAME) continue;
-			cl.send_move_packet(c_id);
-
-		}*/
-
 		clients[c_id]._vl_l.lock();
+		// 움직인 client sector 갱신
 		unordered_set<int> old_viewlist = clients[c_id].view_list;
 		clients[c_id]._vl_l.unlock();
 		unordered_set<int> new_viewlist;
 
-		for (auto& pl : clients) {
+		update_sector(c_id, x, y * -1.0f);
+
+		// 자기가 속한 sector에 존재하는 client만 검색
+		unordered_set<int>& sector = find_sector(clients[c_id].sector_x, clients[c_id].sector_y);
+
+		for (int id : sector) {
+			if (clients[id]._state != ST_INGAME) continue;
+			if (false == can_see(c_id, id)) continue;
+			if (id == c_id) continue;
+			new_viewlist.insert(id);
+		}
+
+		/*for (auto& pl : clients) {
 			if (pl._state != ST_INGAME) continue;
 			if (false == can_see(c_id, pl._id)) continue;
 			if (pl._id == c_id) continue;
 			new_viewlist.insert(pl._id);
-		}
+		}*/
 		clients[c_id].send_move_packet(c_id);
 
 		for (int p_id : new_viewlist) {

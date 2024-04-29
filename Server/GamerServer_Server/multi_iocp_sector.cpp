@@ -2,7 +2,9 @@
 #include <array>
 #include <WS2tcpip.h>
 #include <MSWSock.h>
+#include <thread>
 #include <vector>
+#include <mutex>
 #include <unordered_set>
 #include "protocol.h"
 
@@ -11,6 +13,9 @@
 using namespace std;
 
 enum COMP_TYPE { OP_ACCEPT, OP_RECV, OP_SEND };
+
+constexpr int VIEW_RANGE = 5;		// 실제 클라이언트 시야보다 약간 작게
+
 class OVER_EXP {
 public:
 	WSAOVERLAPPED _over;
@@ -39,13 +44,18 @@ class SESSION {
 	OVER_EXP _recv_over;
 
 public:
+	mutex _s_lock;
 	S_STATE _state;
-	bool _is_active;
 	int _id;
 	SOCKET _socket;
 	float	x, y;
 	float	cx, cy;
 	char	_name[NAME_SIZE];
+	int		sector_x;
+	int		sector_y;
+	unordered_set<int> view_list;
+	mutex	_vl_l;
+
 	int		_prev_remain;
 	int		_last_move_time;
 public:
@@ -56,7 +66,6 @@ public:
 		x = y = cx = cy = 0.0f;
 		_name[0] = 0;
 		_state = ST_FREE;
-		_is_active = false;
 		_prev_remain = 0;
 	}
 
@@ -93,6 +102,9 @@ public:
 	void send_add_player_packet(int c_id);
 	void send_remove_player_packet(int c_id)
 	{
+		_vl_l.lock();
+		view_list.erase(c_id);
+		_vl_l.unlock();
 		SC_REMOVE_PLAYER_PACKET p;
 		p.id = c_id;
 		p.size = sizeof(p);
@@ -105,6 +117,79 @@ array<SESSION, MAX_USER> clients;
 
 SOCKET g_s_socket, g_c_socket;
 OVER_EXP g_a_over;
+
+const int MAX_ROW = 10; // 최대 SESSION 수
+const int MAX_COL = 10;  // 최대 USER 수
+
+mutex g_sector;
+unordered_set<int> g_ObjectListSector[MAX_ROW][MAX_COL];
+
+unordered_set<int>& find_sector(int row, int col) {
+	// sector 내 존재하는 client 리스트 반환
+	if (row < 0) row = 0;
+	if (row >= MAX_ROW) row = MAX_ROW - 1;
+	if (col < 0) col = 0;
+	if (col >= MAX_COL) col = MAX_COL - 1;
+
+	return g_ObjectListSector[row][col];
+}
+
+void init_sector(int id, int x, int y)
+{
+	// 초기화 된 position에 따라 g_ObjectListSector 업데이트
+	int idx_x = x / MAX_ROW;
+	int idx_y = y / MAX_COL;
+
+	if (idx_x < 0) idx_x = 0;
+	if (idx_x >= MAX_ROW) idx_x = MAX_ROW - 1;
+
+	if (idx_y < 0) idx_y = 0;
+	if (idx_y >= MAX_COL) idx_y = MAX_COL - 1;
+
+	clients[id].sector_x = idx_x;
+	clients[id].sector_y = idx_y;
+
+	g_ObjectListSector[idx_x][idx_y].insert(id);
+}
+
+void update_sector(int id, int x, int y)
+{
+	// 이동 된 position에 따라 g_ObjectListSector 업데이트
+	int idx_x = x / MAX_ROW;
+	int idx_y = y / MAX_COL;
+
+	if (idx_x < 0) idx_x = 0;
+	if (idx_x >= MAX_ROW) idx_x = MAX_ROW - 1;
+
+	if (idx_y < 0) idx_y = 0;
+	if (idx_y >= MAX_COL) idx_y = MAX_COL - 1;
+
+	// sector 변환이 없다면 그대로 두고 있다면 갱신
+	// 갱신이 된다면 기존 sector에서 자기 정보를 삭제 / 새로운 sector에 자기 자신 업데이트
+	if (idx_x != clients[id].sector_x)
+	{
+		g_ObjectListSector[clients[id].sector_x][idx_y].erase(id);
+		clients[id].sector_x = idx_x;
+		g_ObjectListSector[idx_x][idx_y].insert(id);
+	}
+	else if (idx_y != clients[id].sector_y)
+	{
+		g_ObjectListSector[idx_x][clients[id].sector_y].erase(id);
+		clients[id].sector_y = idx_y;
+
+		g_ObjectListSector[idx_x][idx_y].insert(id);
+	}
+}
+
+bool can_see(int a, int b)
+{
+	int dist = (clients[a].x - clients[b].x) * (clients[a].x - clients[b].x) +
+		(clients[a].y - clients[b].y) * (clients[a].y - clients[b].y);
+	return dist <= VIEW_RANGE * VIEW_RANGE;
+
+	//if (abs(clients[a].x - clients[b].x) > VIEW_RANGE) return false;
+	//return (abs(clients[a].y - clients[b].y) <= VIEW_RANGE);
+}
 
 void SESSION::send_move_packet(int c_id)
 {
@@ -122,6 +207,9 @@ void SESSION::send_move_packet(int c_id)
 
 void SESSION::send_add_player_packet(int c_id)
 {
+	_vl_l.lock();
+	view_list.insert(c_id);
+	_vl_l.unlock();
 	SC_ADD_PLAYER_PACKET add_packet;
 	add_packet.id = c_id;
 	strcpy_s(add_packet.name, clients[c_id]._name);
@@ -135,6 +223,7 @@ void SESSION::send_add_player_packet(int c_id)
 int get_new_client_id()
 {
 	for (int i = 0; i < MAX_USER; ++i) {
+		lock_guard <mutex> ll{ clients[i]._s_lock };
 		if (clients[i]._state == ST_FREE)
 			return i;
 	}
@@ -147,18 +236,31 @@ void process_packet(int c_id, char* packet)
 	case CS_LOGIN: {
 		CS_LOGIN_PACKET* p = reinterpret_cast<CS_LOGIN_PACKET*>(packet);
 		strcpy_s(clients[c_id]._name, p->name);
-		clients[c_id].x = rand() % W_WIDTH;
-		clients[c_id].y = rand() & W_HEIGHT;
+		int pos_x = rand() % W_WIDTH;
+		int pos_y = rand() & W_HEIGHT;
+		clients[c_id].x = pos_x;
+		clients[c_id].y = pos_y;
 		clients[c_id].y = clients[c_id].y * -1.0f;
 		clients[c_id].cx = clients[c_id].x * -1.0f;
 		clients[c_id].cy = clients[c_id].y * -1.0f;
 		clients[c_id].send_login_info_packet();
+		{
+			lock_guard<mutex> ll{ clients[c_id]._s_lock };
+			clients[c_id]._state = ST_INGAME;
+		}
 		for (auto& pl : clients) {
-			if (ST_INGAME != pl._state) continue;
+			{
+				lock_guard<mutex> ll(pl._s_lock);
+				if (ST_INGAME != pl._state) continue;
+			}
 			if (pl._id == c_id) continue;
 			pl.send_add_player_packet(c_id);
 			clients[c_id].send_add_player_packet(pl._id);
 		}
+
+		// 로그인 시 sector 배정
+		init_sector(c_id, pos_x, pos_y);
+
 		break;
 	}
 	case CS_MOVE: {
@@ -181,10 +283,47 @@ void process_packet(int c_id, char* packet)
 		clients[c_id].cx = cx;
 		clients[c_id].cy = cy;
 
-		for (auto& cl : clients) {
-			if (cl._state != ST_INGAME) continue;
-			cl.send_move_packet(c_id);
+		clients[c_id]._vl_l.lock();
+		// 움직인 client sector 갱신
+		unordered_set<int> old_viewlist = clients[c_id].view_list;
+		clients[c_id]._vl_l.unlock();
+		unordered_set<int> new_viewlist;
 
+		update_sector(c_id, x, y * -1.0f);
+
+		// 자기가 속한 sector에 존재하는 client만 검색
+		unordered_set<int>& sector = find_sector(clients[c_id].sector_x, clients[c_id].sector_y);
+
+		for (int id : sector) {
+			if (clients[id]._state != ST_INGAME) continue;
+			if (false == can_see(c_id, id)) continue;
+			if (id == c_id) continue;
+			new_viewlist.insert(id);
+		}
+
+		/*for (auto& pl : clients) {
+			if (pl._state != ST_INGAME) continue;
+			if (false == can_see(c_id, pl._id)) continue;
+			if (pl._id == c_id) continue;
+			new_viewlist.insert(pl._id);
+		}*/
+		clients[c_id].send_move_packet(c_id);
+
+		for (int p_id : new_viewlist) {
+			if (0 == old_viewlist.count(p_id)) {
+				clients[c_id].send_add_player_packet(p_id);
+				clients[p_id].send_add_player_packet(c_id);
+			}
+			else {
+				clients[p_id].send_move_packet(c_id);
+			}
+		}
+
+		for (int p_id : old_viewlist) {
+			if (0 == new_viewlist.count(p_id)) {
+				clients[c_id].send_remove_player_packet(p_id);
+				clients[p_id].send_remove_player_packet(c_id);
+			}
 		}
 	}
 	}
@@ -193,39 +332,21 @@ void process_packet(int c_id, char* packet)
 void disconnect(int c_id)
 {
 	for (auto& pl : clients) {
-		if (ST_INGAME != pl._state) continue;
+		{
+			lock_guard<mutex> ll(pl._s_lock);
+			if (ST_INGAME != pl._state) continue;
+		}
 		if (pl._id == c_id) continue;
 		pl.send_remove_player_packet(c_id);
 	}
 	closesocket(clients[c_id]._socket);
+
+	lock_guard<mutex> ll(clients[c_id]._s_lock);
 	clients[c_id]._state = ST_FREE;
 }
 
-int main()
+void worker_thread(HANDLE h_iocp)
 {
-	HANDLE h_iocp;
-
-	WSADATA WSAData;
-	WSAStartup(MAKEWORD(2, 2), &WSAData);
-	SOCKET server = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
-	SOCKADDR_IN server_addr;
-	memset(&server_addr, 0, sizeof(server_addr));
-	server_addr.sin_family = AF_INET;
-	server_addr.sin_port = htons(PORT_NUM);
-	server_addr.sin_addr.S_un.S_addr = INADDR_ANY;
-	bind(server, reinterpret_cast<sockaddr*>(&server_addr), sizeof(server_addr));
-	listen(server, SOMAXCONN);
-	SOCKADDR_IN cl_addr;
-	int addr_size = sizeof(cl_addr);
-	int client_id = 0;
-
-	h_iocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, 0, 0, 0);
-	CreateIoCompletionPort(reinterpret_cast<HANDLE>(server), h_iocp, 9999, 0);
-	SOCKET c_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
-	OVER_EXP a_over;
-	a_over._comp_type = OP_ACCEPT;
-	AcceptEx(server, c_socket, a_over._send_buf, 0, addr_size + 16, addr_size + 16, 0, &a_over._over);
-
 	while (true) {
 		DWORD num_bytes;
 		ULONG_PTR key;
@@ -252,7 +373,10 @@ int main()
 		case OP_ACCEPT: {
 			int client_id = get_new_client_id();
 			if (client_id != -1) {
-				clients[client_id]._state = ST_INGAME;
+				{
+					lock_guard<mutex> ll(clients[client_id]._s_lock);
+					clients[client_id]._state = ST_ALLOC;
+				}
 				clients[client_id].x = 0.0f;
 				clients[client_id].y = 0.0f;
 				clients[client_id].cx = 0.0f;
@@ -260,17 +384,18 @@ int main()
 				clients[client_id]._id = client_id;
 				clients[client_id]._name[0] = 0;
 				clients[client_id]._prev_remain = 0;
-				clients[client_id]._socket = c_socket;
-				CreateIoCompletionPort(reinterpret_cast<HANDLE>(c_socket),
+				clients[client_id]._socket = g_c_socket;
+				CreateIoCompletionPort(reinterpret_cast<HANDLE>(g_c_socket),
 					h_iocp, client_id, 0);
 				clients[client_id].do_recv();
-				c_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
+				g_c_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
 			}
 			else {
 				cout << "Max user exceeded.\n";
 			}
-			ZeroMemory(&a_over._over, sizeof(a_over._over));
-			AcceptEx(server, c_socket, a_over._send_buf, 0, addr_size + 16, addr_size + 16, 0, &a_over._over);
+			ZeroMemory(&g_a_over._over, sizeof(g_a_over._over));
+			int addr_size = sizeof(SOCKADDR_IN);
+			AcceptEx(g_s_socket, g_c_socket, g_a_over._send_buf, 0, addr_size + 16, addr_size + 16, 0, &g_a_over._over);
 			break;
 		}
 		case OP_RECV: {
@@ -297,6 +422,36 @@ int main()
 			break;
 		}
 	}
-	closesocket(server);
+}
+
+int main()
+{
+	HANDLE h_iocp;
+
+	WSADATA WSAData;
+	WSAStartup(MAKEWORD(2, 2), &WSAData);
+	g_s_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
+	SOCKADDR_IN server_addr;
+	memset(&server_addr, 0, sizeof(server_addr));
+	server_addr.sin_family = AF_INET;
+	server_addr.sin_port = htons(PORT_NUM);
+	server_addr.sin_addr.S_un.S_addr = INADDR_ANY;
+	bind(g_s_socket, reinterpret_cast<sockaddr*>(&server_addr), sizeof(server_addr));
+	listen(g_s_socket, SOMAXCONN);
+	SOCKADDR_IN cl_addr;
+	int addr_size = sizeof(cl_addr);
+	h_iocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, 0, 0, 0);
+	CreateIoCompletionPort(reinterpret_cast<HANDLE>(g_s_socket), h_iocp, 9999, 0);
+	g_c_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
+	g_a_over._comp_type = OP_ACCEPT;
+	AcceptEx(g_s_socket, g_c_socket, g_a_over._send_buf, 0, addr_size + 16, addr_size + 16, 0, &g_a_over._over);
+
+	vector <thread> worker_threads;
+	int num_threads = std::thread::hardware_concurrency();
+	for (int i = 0; i < num_threads; ++i)
+		worker_threads.emplace_back(worker_thread, h_iocp);
+	for (auto& th : worker_threads)
+		th.join();
+	closesocket(g_s_socket);
 	WSACleanup();
 }

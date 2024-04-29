@@ -56,9 +56,9 @@ void ObjectManager::creatBoard(int *idx)
 {
 	// 체스판 만들기
 	int index;
-	for (int i=0; i< 100; i++)
+	for (int i=0; i< 400; i++)
 	{
-		for (int j = 0; j < 100; j++)
+		for (int j = 0; j < 400; j++)
 		{
 			vec3 pos = vec3(i, -j, 0.0f);
 			index = *idx + 1;

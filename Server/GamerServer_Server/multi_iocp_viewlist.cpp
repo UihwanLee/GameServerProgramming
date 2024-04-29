@@ -51,6 +51,8 @@ public:
 	float	x, y;
 	float	cx, cy;
 	char	_name[NAME_SIZE];
+	int		sector_x;
+	int		sector_y;
 	unordered_set<int> view_list;
 	mutex	_vl_l;
 
@@ -171,8 +173,13 @@ void process_packet(int c_id, char* packet)
 	case CS_LOGIN: {
 		CS_LOGIN_PACKET* p = reinterpret_cast<CS_LOGIN_PACKET*>(packet);
 		strcpy_s(clients[c_id]._name, p->name);
-		clients[c_id].x = rand() % W_WIDTH;
-		clients[c_id].y = rand() & W_HEIGHT;
+		int sector_x = 10;
+		int sector_y = 10;
+		//get_best_sector(&sector_x, &sector_y);
+		int pos_x = rand() % W_WIDTH;
+		int pos_y = rand() & W_HEIGHT;
+		clients[c_id].x = pos_x;
+		clients[c_id].y = pos_y;
 		clients[c_id].y = clients[c_id].y * -1.0f;
 		clients[c_id].cx = clients[c_id].x * -1.0f;
 		clients[c_id].cy = clients[c_id].y * -1.0f;
@@ -190,6 +197,7 @@ void process_packet(int c_id, char* packet)
 			pl.send_add_player_packet(c_id);
 			clients[c_id].send_add_player_packet(pl._id);
 		}
+
 		break;
 	}
 	case CS_MOVE: {
@@ -212,16 +220,12 @@ void process_packet(int c_id, char* packet)
 		clients[c_id].cx = cx;
 		clients[c_id].cy = cy;
 
-		for (auto& cl : clients) {
-			if (cl._state != ST_INGAME) continue;
-			cl.send_move_packet(c_id);
-
-		}
-
-		/*clients[c_id]._vl_l.lock();
+		clients[c_id]._vl_l.lock();
+		// 움직인 client sector 갱신
 		unordered_set<int> old_viewlist = clients[c_id].view_list;
 		clients[c_id]._vl_l.unlock();
 		unordered_set<int> new_viewlist;
+
 
 		for (auto& pl : clients) {
 			if (pl._state != ST_INGAME) continue;
@@ -246,7 +250,7 @@ void process_packet(int c_id, char* packet)
 				clients[c_id].send_remove_player_packet(p_id);
 				clients[p_id].send_remove_player_packet(c_id);
 			}
-		}*/
+		}
 	}
 	}
 }
@@ -291,10 +295,6 @@ void worker_thread(HANDLE h_iocp)
 			continue;
 		}
 
-		// 소켓을 non-blocking으로 설정
-		u_long mode = 1;
-		ioctlsocket(g_c_socket, FIONBIO, &mode);
-
 		switch (ex_over->_comp_type) {
 		case OP_ACCEPT: {
 			int client_id = get_new_client_id();
@@ -315,10 +315,6 @@ void worker_thread(HANDLE h_iocp)
 					h_iocp, client_id, 0);
 				clients[client_id].do_recv();
 				g_c_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
-
-				// 소켓을 non-blocking으로 설정
-				u_long mode = 1;
-				ioctlsocket(g_c_socket, FIONBIO, &mode);
 			}
 			else {
 				cout << "Max user exceeded.\n";
