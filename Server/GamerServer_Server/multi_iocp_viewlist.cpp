@@ -226,7 +226,6 @@ void process_packet(int c_id, char* packet)
 		clients[c_id]._vl_l.unlock();
 		unordered_set<int> new_viewlist;
 
-
 		for (auto& pl : clients) {
 			if (pl._state != ST_INGAME) continue;
 			if (false == can_see(c_id, pl._id)) continue;

@@ -15,22 +15,16 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Figure.cpp">
+    <ClCompile Include="multi_iocp_sector.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="overlapped_server.cpp">
+    <ClCompile Include="multi_iocp_sector2.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="muti_iocp_server.cpp">
+    <ClCompile Include="multi_iocp_viewlist.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="single_iocp_server.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="non_blocking_server.cpp">
-      <Filter>소스 파일</Filter>
-    </ClCompile>
-    <ClCompile Include="multi_thread_IO_server.cpp">
+    <ClCompile Include="multi_iocp.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
