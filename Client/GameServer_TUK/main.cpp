@@ -22,8 +22,8 @@ WSABUF wsabuf;
 WSAOVERLAPPED wsaover;
 bool bshutdown = false;
 
-int g_left_x;
-int g_top_y;
+int g_pos_x;
+int g_pos_y;
 int g_myid;
 
 // 오브젝트 리스트
@@ -47,8 +47,8 @@ void ProcessPacket(char* ptr)
 		camera = glm::translate(camera, glm::vec3(packet->cx, packet->cy, 0.0f));
 
 		g_myid = packet->id;
-		g_left_x = packet->x - 8;
-		g_top_y = packet->y - 8;
+		g_pos_x = packet->x;
+		g_pos_y = packet->cy;
 		//avatar.show();
 	}
 	break;
@@ -60,23 +60,12 @@ void ProcessPacket(char* ptr)
 
 		if (id == g_myid) {
 			m_ObjectManager->setPlayerPosition(g_myid, my_packet->x, my_packet->y);
-			//avatar.move(my_packet->x, my_packet->y);
-			g_left_x = my_packet->x - 4;
-			g_top_y = my_packet->y - 4;
-			//avatar.show();
 		}
 		else if (id < MAX_USER) {
 			m_ObjectManager->m_players[id] = m_ObjectManager->creatPlayer();
 			m_ObjectManager->setPlayerPosition(id, my_packet->x, my_packet->y);
-			//players[id] = OBJECT{ *pieces, 0, 0, 64, 64 };
-			//players[id].move(my_packet->x, my_packet->y);
-			//players[id].set_name(my_packet->name);
-			//players[id].show();
 		}
 		else {
-			//npc[id - NPC_START].x = my_packet->x;
-			//npc[id - NPC_START].y = my_packet->y;
-			//npc[id - NPC_START].attr |= BOB_ATTR_VISIBLE;
 		}
 		break;
 	}
@@ -88,8 +77,8 @@ void ProcessPacket(char* ptr)
 			camera = glm::translate(camera, glm::vec3(my_packet->cx, my_packet->cy, 0.0f));
 			m_ObjectManager->setPlayerPosition(g_myid, my_packet->x, my_packet->y);
 			//avatar.move(my_packet->x, my_packet->y);
-			g_left_x = my_packet->x - 8;
-			g_top_y = my_packet->y - 8;
+			g_pos_x = my_packet->x;
+			g_pos_y = my_packet->cy;
 		}
 		else if (other_id < MAX_USER) {
 			m_ObjectManager->setPlayerPosition(other_id, my_packet->x, my_packet->y);
@@ -403,7 +392,16 @@ GLvoid render()
 	{
 		if (m_ObjectManager->m_ObjectList[i]->isActive())
 		{
-			drawObjects(i);
+			int min_x = (g_pos_x - 8 < 0) ? 0 : g_pos_x - 8;
+			int max_x = (g_pos_x + 8 >= W_WIDTH) ? W_WIDTH : g_pos_x + 8;
+
+			int min_y = (g_pos_y - 8 < 0) ? 0 : g_pos_y - 8;
+			int max_y = (g_pos_y + 8 >= W_HEIGHT) ? W_HEIGHT : g_pos_y + 8;
+
+			if (i%W_WIDTH >= min_x && i % W_WIDTH <= max_x)
+			{
+				drawObjects(i);
+			}
 		}
 	}
 	for (auto& player : m_ObjectManager->m_players)
