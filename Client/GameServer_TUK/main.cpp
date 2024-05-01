@@ -48,7 +48,7 @@ void ProcessPacket(char* ptr)
 
 		g_myid = packet->id;
 		g_pos_x = packet->x;
-		g_pos_y = packet->cy;
+		g_pos_y = packet->y * -1.0f;
 		//avatar.show();
 	}
 	break;
@@ -78,7 +78,7 @@ void ProcessPacket(char* ptr)
 			m_ObjectManager->setPlayerPosition(g_myid, my_packet->x, my_packet->y);
 			//avatar.move(my_packet->x, my_packet->y);
 			g_pos_x = my_packet->x;
-			g_pos_y = my_packet->cy;
+			g_pos_y = my_packet->y * -1.0f;
 		}
 		else if (other_id < MAX_USER) {
 			m_ObjectManager->setPlayerPosition(other_id, my_packet->x, my_packet->y);
@@ -388,22 +388,29 @@ GLvoid render()
 
 	drawView();
 	drawProjection();
-	for (int i = 0; i < m_ObjectManager->m_ObjectList.size(); i++)
+
+	// player 기준으로 양 옆 8개의 board만 client 내 표시되도록 최적화
+	int start_x = (g_pos_x - 8 <= 0) ? 0 : g_pos_x - 8;
+	int end_x = (g_pos_x + 8 >= W_WIDTH) ? W_WIDTH - 1 : g_pos_x + 8;
+
+	int start_y = (g_pos_y - 8 <= 0) ? 0 : g_pos_y - 8;
+	int end_y = (g_pos_y + 8 >= W_HEIGHT) ? W_HEIGHT : g_pos_y + 8;
+
+	for (int x = start_x; x < end_x; ++x)
 	{
-		if (m_ObjectManager->m_ObjectList[i]->isActive())
+		for (int y = start_y; y < end_y; ++y)
 		{
-			int min_x = (g_pos_x - 8 < 0) ? 0 : g_pos_x - 8;
-			int max_x = (g_pos_x + 8 >= W_WIDTH) ? W_WIDTH : g_pos_x + 8;
-
-			int min_y = (g_pos_y - 8 < 0) ? 0 : g_pos_y - 8;
-			int max_y = (g_pos_y + 8 >= W_HEIGHT) ? W_HEIGHT : g_pos_y + 8;
-
-			if (i%W_WIDTH >= min_x && i % W_WIDTH <= max_x)
+			int index = x * W_HEIGHT + y;
+			if (index < m_ObjectManager->m_ObjectList.size())
 			{
-				drawObjects(i);
+				if (m_ObjectManager->m_ObjectList[index]->isActive())
+				{
+					drawObjects(index);
+				}
 			}
 		}
 	}
+
 	for (auto& player : m_ObjectManager->m_players)
 	{
 		if (m_ObjectManager->m_players[player.first]->isActive())
