@@ -179,6 +179,7 @@ void process_packet(int c_id, char* packet)
 				if (ST_INGAME != pl._state) continue;
 			}
 			if (pl._id == c_id) continue;
+			if (false == can_see(pl._id, c_id)) continue;
 			pl.send_add_player_packet(c_id);
 			clients[c_id].send_add_player_packet(pl._id);
 		}
@@ -239,7 +240,8 @@ void disconnect(int c_id)
 			if (ST_INGAME != pl._state) continue;
 		}
 		if (pl._id == c_id) continue;
-		pl.send_remove_player_packet(c_id);
+		if (true == can_see(pl._id, c_id)) 
+			pl.send_remove_player_packet(c_id);
 	}
 	closesocket(clients[c_id]._socket);
 
