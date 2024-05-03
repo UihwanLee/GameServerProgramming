@@ -12,7 +12,7 @@
 #pragma comment(lib, "MSWSock.lib")
 using namespace std;
 
-enum COMP_TYPE { OP_ACCEPT, OP_RECV, OP_SEND };
+enum COMP_TYPE { OP_ACCEPT, OP_RECV, OP_SEND, OP_RANDOM_MOVE };
 
 constexpr int VIEW_RANGE = 5;		// 실제 클라이언트 시야보다 약간 작게
 
@@ -379,6 +379,10 @@ void worker_thread(HANDLE h_iocp)
 		case OP_SEND:
 			delete ex_over;
 			break;
+		case OP_RANDOM_MOVE:
+			objects[key].do_random_move();
+			delete ex_over;
+			break;
 		}
 	}
 }
@@ -415,13 +419,34 @@ void do_ai_old()
 }
 
 // Heart Beat
-void do_ai()
+void do_ai_hb()
 {
 	using namespace chrono;
 	while (true) {
 		auto start_t = system_clock::now();
 		for (int i = 0; i < MAX_NPC; ++i) 
 			objects[i].heart_beat();
+		auto end_t = system_clock::now();
+		auto hb_time = end_t - start_t;
+		cout << "Heart Beat Time : "
+			<< duration_cast<milliseconds>(hb_time).count()
+			<< "ms.\n";
+		if (hb_time < 1s)
+			this_thread::sleep_for(1s - hb_time);
+	}
+}
+
+// Worker Thread에 떠넘기기
+void do_ai_wk(HANDLE h_iocp)
+{
+	using namespace chrono;
+	while (true) {
+		auto start_t = system_clock::now();
+		for (int i = 0; i < MAX_NPC; ++i) {
+			OVER_EXP* over = new OVER_EXP;
+			over->_comp_type = OP_RANDOM_MOVE;
+			PostQueuedCompletionStatus(h_iocp, 1, i, &over->_over);
+		}
 		auto end_t = system_clock::now();
 		auto hb_time = end_t - start_t;
 		cout << "Heart Beat Time : "
@@ -456,7 +481,7 @@ int main()
 	AcceptEx(g_s_socket, g_c_socket, g_a_over._send_buf, 0, addr_size + 16, addr_size + 16, 0, &g_a_over._over);
 
 	initialize_npc();
-	thread ai_thread{ do_ai };
+	thread ai_thread{ do_ai_wk, h_iocp };
 
 	vector <thread> worker_threads;
 	int num_threads = std::thread::hardware_concurrency();
