@@ -119,6 +119,10 @@ public:
 		do_send(&p);
 	}
 	void do_random_move();
+	void heart_beat()
+	{
+		do_random_move();
+	}
 };
 
 array<SESSION, MAX_NPC + MAX_USER> objects;
@@ -391,7 +395,7 @@ void initialize_npc()
 	}
 }
 
-void do_ai()
+void do_ai_old()
 {
 	using namespace chrono;
 	while (true) {
@@ -409,6 +413,25 @@ void do_ai()
 		}
 	}
 }
+
+// Heart Beat
+void do_ai()
+{
+	using namespace chrono;
+	while (true) {
+		auto start_t = system_clock::now();
+		for (int i = 0; i < MAX_NPC; ++i) 
+			objects[i].heart_beat();
+		auto end_t = system_clock::now();
+		auto hb_time = end_t - start_t;
+		cout << "Heart Beat Time : "
+			<< duration_cast<milliseconds>(hb_time).count()
+			<< "ms.\n";
+		if (hb_time < 1s)
+			this_thread::sleep_for(1s - hb_time);
+	}
+}
+
 
 int main()
 {
