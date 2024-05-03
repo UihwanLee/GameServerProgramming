@@ -108,7 +108,7 @@ public:
 	}
 };
 
-array<SESSION, MAX_USER> clients;
+array<SESSION, MAX_NPC + MAX_USER> clients;
 
 SOCKET g_s_socket, g_c_socket;
 OVER_EXP g_a_over;
@@ -152,7 +152,7 @@ void SESSION::send_add_player_packet(int c_id)
 
 int get_new_client_id()
 {
-	for (int i = 0; i < MAX_USER; ++i) {
+	for (int i = MAX_NPC; i < MAX_NPC + MAX_USER; ++i) {
 		lock_guard <mutex> ll{ clients[i]._s_lock };
 		if (clients[i]._state == ST_FREE)
 			return i;
@@ -326,6 +326,17 @@ void worker_thread(HANDLE h_iocp)
 	}
 }
 
+void initialize_npc()
+{
+	for (int i = 0; i < MAX_NPC; ++i) {
+		clients[i].x = rand() % W_WIDTH;
+		clients[i].y = rand() % W_HEIGHT;
+		clients[i]._id = i;
+		sprintf_s(clients[i]._name, "N%d", i);
+		clients[i]._state = ST_INGAME;
+	}
+}
+
 int main()
 {
 	HANDLE h_iocp;
@@ -348,6 +359,7 @@ int main()
 	g_a_over._comp_type = OP_ACCEPT;
 	AcceptEx(g_s_socket, g_c_socket, g_a_over._send_buf, 0, addr_size + 16, addr_size + 16, 0, &g_a_over._over);
 
+	initialize_npc();
 	vector <thread> worker_threads;
 	int num_threads = std::thread::hardware_concurrency();
 	for (int i = 0; i < num_threads; ++i)

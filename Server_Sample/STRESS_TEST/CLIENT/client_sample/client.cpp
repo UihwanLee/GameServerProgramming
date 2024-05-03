@@ -143,16 +143,11 @@ void ProcessPacket(char* ptr)
 			g_top_y = my_packet->y - 4;
 			avatar.show();
 		}
-		else if (id < MAX_USER) {
+		else {
 			players[id] = OBJECT{ *pieces, 0, 0, 64, 64 };
 			players[id].move(my_packet->x, my_packet->y);
 			players[id].set_name(my_packet->name);
 			players[id].show();
-		}
-		else {
-			//npc[id - NPC_START].x = my_packet->x;
-			//npc[id - NPC_START].y = my_packet->y;
-			//npc[id - NPC_START].attr |= BOB_ATTR_VISIBLE;
 		}
 		break;
 	}
@@ -165,12 +160,8 @@ void ProcessPacket(char* ptr)
 			g_left_x = my_packet->x - 8;
 			g_top_y = my_packet->y - 8;
 		}
-		else if (other_id < MAX_USER) {
-			players[other_id].move(my_packet->x, my_packet->y);
-		}
 		else {
-			//npc[other_id - NPC_START].x = my_packet->x;
-			//npc[other_id - NPC_START].y = my_packet->y;
+			players[other_id].move(my_packet->x, my_packet->y);
 		}
 		break;
 	}
@@ -182,11 +173,8 @@ void ProcessPacket(char* ptr)
 		if (other_id == g_myid) {
 			avatar.hide();
 		}
-		else if (other_id < MAX_USER) {
-			players.erase(other_id);
-		}
 		else {
-			//		npc[other_id - NPC_START].attr &= ~BOB_ATTR_VISIBLE;
+			players.erase(other_id);
 		}
 		break;
 	}
