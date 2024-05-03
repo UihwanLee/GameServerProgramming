@@ -14,20 +14,20 @@
 #include <array>
 #include <memory>
 
+#include "..\..\SERVER\SERVER\protocol.h"
+
 using namespace std;
 using namespace chrono;
 
 extern HWND		hWnd;
 
 const static int MAX_TEST = 10000;
-const static int MAX_CLIENTS = MAX_TEST * 2;
+constexpr int MAX_CLIENTS = MAX_USER * 2 + MAX_NPC;
 const static int INVALID_ID = -1;
 const static int MAX_PACKET_SIZE = 255;
 const static int MAX_BUFF_SIZE = 255;
 
 #pragma comment (lib, "ws2_32.lib")
-
-#include "..\..\SERVER\SERVER\protocol.h"
 
 HANDLE g_hiocp;
 
@@ -250,7 +250,7 @@ void Worker_Thread()
 	}
 }
 
-constexpr int DELAY_LIMIT = 100;
+constexpr int DELAY_LIMIT = 10000;
 constexpr int DELAY_LIMIT2 = 150;
 constexpr int ACCEPT_DELY = 50;
 

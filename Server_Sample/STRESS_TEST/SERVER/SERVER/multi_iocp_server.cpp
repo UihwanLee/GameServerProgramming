@@ -449,7 +449,7 @@ void do_ai_wk(HANDLE h_iocp)
 		}
 		auto end_t = system_clock::now();
 		auto hb_time = end_t - start_t;
-		cout << "Heart Beat Time : "
+		cout << "Worker Thred Time : "
 			<< duration_cast<milliseconds>(hb_time).count()
 			<< "ms.\n";
 		if (hb_time < 1s)
