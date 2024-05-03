@@ -16,6 +16,11 @@ enum COMP_TYPE { OP_ACCEPT, OP_RECV, OP_SEND };
 
 constexpr int VIEW_RANGE = 5;		// 실제 클라이언트 시야보다 약간 작게
 
+bool is_npc(int a)
+{
+	return a < MAX_NPC;
+}
+
 class OVER_EXP {
 public:
 	WSAOVERLAPPED _over;
@@ -80,6 +85,10 @@ public:
 
 	void do_send(void* packet)
 	{
+		if (true == is_npc(_id)) {
+			cout << "Send to NPC!! Error";
+			return;
+		}
 		OVER_EXP* sdata = new OVER_EXP{ reinterpret_cast<char*>(packet) };
 		WSASend(_socket, &sdata->_wsabuf, 1, 0, 0, &sdata->_over, 0);
 	}
@@ -97,6 +106,8 @@ public:
 	void send_add_player_packet(int c_id);
 	void send_remove_player_packet(int c_id)
 	{
+		if (true == is_npc(_id))
+			return;
 		_vl_l.lock();
 		view_list.erase(c_id);
 		_vl_l.unlock();
@@ -125,6 +136,9 @@ bool can_see(int a, int b)
 
 void SESSION::send_move_packet(int c_id)
 {
+	if (true == is_npc(_id))
+		return;
+
 	SC_MOVE_PLAYER_PACKET p;
 	p.id = c_id;
 	p.size = sizeof(SC_MOVE_PLAYER_PACKET);
@@ -137,6 +151,9 @@ void SESSION::send_move_packet(int c_id)
 
 void SESSION::send_add_player_packet(int c_id)
 {
+	if (true == is_npc(_id))
+		return;
+
 	_vl_l.lock();
 	view_list.insert(c_id);
 	_vl_l.unlock();
