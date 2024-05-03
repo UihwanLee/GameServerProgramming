@@ -55,6 +55,7 @@ public:
 	SOCKET _socket;
 	short	x, y;
 	char	_name[NAME_SIZE];
+	chrono::system_clock::time_point _rm_time;
 	unordered_set<int> view_list;
 	mutex	_vl_l;
 
@@ -103,8 +104,8 @@ public:
 		do_send(&p);
 	}
 	void send_move_packet(int c_id);
-	void send_add_player_packet(int c_id);
-	void send_remove_player_packet(int c_id)
+	void send_add_object_packet(int c_id);
+	void send_remove_object_packet(int c_id)
 	{
 		if (true == is_npc(_id))
 			return;
@@ -117,21 +118,22 @@ public:
 		p.type = SC_REMOVE_PLAYER;
 		do_send(&p);
 	}
+	void do_random_move();
 };
 
-array<SESSION, MAX_NPC + MAX_USER> clients;
+array<SESSION, MAX_NPC + MAX_USER> objects;
 
 SOCKET g_s_socket, g_c_socket;
 OVER_EXP g_a_over;
 
 bool can_see(int a, int b)
 {
-	int dist = (clients[a].x - clients[b].x)* (clients[a].x - clients[b].x) +
-		(clients[a].y - clients[b].y) * (clients[a].y - clients[b].y);
+	int dist = (objects[a].x - objects[b].x) * (objects[a].x - objects[b].x) +
+		(objects[a].y - objects[b].y) * (objects[a].y - objects[b].y);
 	return dist <= VIEW_RANGE * VIEW_RANGE;
 
-	//if (abs(clients[a].x - clients[b].x) > VIEW_RANGE) return false;
-	//return (abs(clients[a].y - clients[b].y) <= VIEW_RANGE);
+	//if (abs(objects[a].x - objects[b].x) > VIEW_RANGE) return false;
+	//return (abs(objects[a].y - objects[b].y) <= VIEW_RANGE);
 }
 
 void SESSION::send_move_packet(int c_id)
@@ -143,13 +145,13 @@ void SESSION::send_move_packet(int c_id)
 	p.id = c_id;
 	p.size = sizeof(SC_MOVE_PLAYER_PACKET);
 	p.type = SC_MOVE_PLAYER;
-	p.x = clients[c_id].x;
-	p.y = clients[c_id].y;
-	p.move_time = clients[c_id]._last_move_time;
+	p.x = objects[c_id].x;
+	p.y = objects[c_id].y;
+	p.move_time = objects[c_id]._last_move_time;
 	do_send(&p);
 }
 
-void SESSION::send_add_player_packet(int c_id)
+void SESSION::send_add_object_packet(int c_id)
 {
 	if (true == is_npc(_id))
 		return;
@@ -159,19 +161,53 @@ void SESSION::send_add_player_packet(int c_id)
 	_vl_l.unlock();
 	SC_ADD_PLAYER_PACKET add_packet;
 	add_packet.id = c_id;
-	strcpy_s(add_packet.name, clients[c_id]._name);
+	strcpy_s(add_packet.name, objects[c_id]._name);
 	add_packet.size = sizeof(add_packet);
 	add_packet.type = SC_ADD_PLAYER;
-	add_packet.x = clients[c_id].x;
-	add_packet.y = clients[c_id].y;
+	add_packet.x = objects[c_id].x;
+	add_packet.y = objects[c_id].y;
 	do_send(&add_packet);
+}
+
+void SESSION::do_random_move()
+{
+	unordered_set<int> old_vl;
+	for (int i = MAX_NPC; i < MAX_NPC + MAX_USER; ++i) {
+		if (objects[i]._state != ST_INGAME) continue;
+		if (true == can_see(i, _id)) old_vl.insert(i);
+	}
+
+	switch (rand() % 4)
+	{
+	case 0: if (x > 0) x--; break;
+	case 1: if (x < W_WIDTH - 1) x++; break;
+	case 2: if (y > 0) y--; break;
+	case 3: if (y < W_HEIGHT) y++; break;
+	}
+
+	unordered_set<int> new_vl;
+	for (int i = MAX_NPC; i < MAX_NPC + MAX_USER; ++i) {
+		if (objects[i]._state != ST_INGAME) continue;
+		if (true == can_see(i, _id)) new_vl.insert(i);
+	}
+
+	for (auto pl : new_vl) {
+		if (0 == old_vl.count(pl))
+			objects[pl].send_add_object_packet(_id);
+		else
+			objects[pl].send_move_packet(_id);
+	}
+	for (auto pl : old_vl) {
+		if (0 == new_vl.count(pl))
+			objects[pl].send_remove_object_packet(_id);
+	}
 }
 
 int get_new_client_id()
 {
 	for (int i = MAX_NPC; i < MAX_NPC + MAX_USER; ++i) {
-		lock_guard <mutex> ll{ clients[i]._s_lock };
-		if (clients[i]._state == ST_FREE)
+		lock_guard <mutex> ll{ objects[i]._s_lock };
+		if (objects[i]._state == ST_FREE)
 			return i;
 	}
 	return -1;
@@ -182,67 +218,67 @@ void process_packet(int c_id, char* packet)
 	switch (packet[1]) {
 	case CS_LOGIN: {
 		CS_LOGIN_PACKET* p = reinterpret_cast<CS_LOGIN_PACKET*>(packet);
-		strcpy_s(clients[c_id]._name, p->name);
-		clients[c_id].x = rand() % W_WIDTH;
-		clients[c_id].y = rand() & W_HEIGHT;
-		clients[c_id].send_login_info_packet();
+		strcpy_s(objects[c_id]._name, p->name);
+		objects[c_id].x = rand() % W_WIDTH;
+		objects[c_id].y = rand() & W_HEIGHT;
+		objects[c_id].send_login_info_packet();
 		{
-			lock_guard<mutex> ll{ clients[c_id]._s_lock };
-			clients[c_id]._state = ST_INGAME;
+			lock_guard<mutex> ll{ objects[c_id]._s_lock };
+			objects[c_id]._state = ST_INGAME;
 		}
-		for (auto& pl : clients) {
+		for (auto& pl : objects) {
 			{
 				lock_guard<mutex> ll(pl._s_lock);
 				if (ST_INGAME != pl._state) continue;
 			}
 			if (pl._id == c_id) continue;
 			if (false == can_see(pl._id, c_id)) continue;
-			pl.send_add_player_packet(c_id);
-			clients[c_id].send_add_player_packet(pl._id);
+			pl.send_add_object_packet(c_id);
+			objects[c_id].send_add_object_packet(pl._id);
 		}
 		break;
 	}
 	case CS_MOVE: {
 		CS_MOVE_PACKET* p = reinterpret_cast<CS_MOVE_PACKET*>(packet);
-		clients[c_id]._last_move_time = p->move_time;
-		short x = clients[c_id].x;
-		short y = clients[c_id].y;
+		objects[c_id]._last_move_time = p->move_time;
+		short x = objects[c_id].x;
+		short y = objects[c_id].y;
 		switch (p->direction) {
 		case 0: if (y > 0) y--; break;
 		case 1: if (y < W_HEIGHT - 1) y++; break;
 		case 2: if (x > 0) x--; break;
 		case 3: if (x < W_WIDTH - 1) x++; break;
 		}
-		clients[c_id].x = x;
-		clients[c_id].y = y;
+		objects[c_id].x = x;
+		objects[c_id].y = y;
 
-		clients[c_id]._vl_l.lock();
-		unordered_set<int> old_viewlist = clients[c_id].view_list;
-		clients[c_id]._vl_l.unlock();
+		objects[c_id]._vl_l.lock();
+		unordered_set<int> old_viewlist = objects[c_id].view_list;
+		objects[c_id]._vl_l.unlock();
 		unordered_set<int> new_viewlist;
 
-		for (auto& pl : clients) {
+		for (auto& pl : objects) {
 			if (pl._state != ST_INGAME) continue;
 			if (false == can_see(c_id, pl._id)) continue;
 			if (pl._id == c_id) continue;
 			new_viewlist.insert(pl._id);
 		}
-		clients[c_id].send_move_packet(c_id);
+		objects[c_id].send_move_packet(c_id);
 
 		for (int p_id : new_viewlist) {
 			if (0 == old_viewlist.count(p_id)) {
-				clients[c_id].send_add_player_packet(p_id);
-				clients[p_id].send_add_player_packet(c_id);
+				objects[c_id].send_add_object_packet(p_id);
+				objects[p_id].send_add_object_packet(c_id);
 			} 
 			else {
-				clients[p_id].send_move_packet(c_id);
+				objects[p_id].send_move_packet(c_id);
 			}
 		}
 
 		for (int p_id : old_viewlist) {
 			if (0 == new_viewlist.count(p_id)) {
-				clients[c_id].send_remove_player_packet(p_id);
-				clients[p_id].send_remove_player_packet(c_id);
+				objects[c_id].send_remove_object_packet(p_id);
+				objects[p_id].send_remove_object_packet(c_id);
 			}
 		}
 	}
@@ -251,19 +287,19 @@ void process_packet(int c_id, char* packet)
 
 void disconnect(int c_id)
 {
-	for (auto& pl : clients) {
+	for (auto& pl : objects) {
 		{
 			lock_guard<mutex> ll(pl._s_lock);
 			if (ST_INGAME != pl._state) continue;
 		}
 		if (pl._id == c_id) continue;
 		if (true == can_see(pl._id, c_id)) 
-			pl.send_remove_player_packet(c_id);
+			pl.send_remove_object_packet(c_id);
 	}
-	closesocket(clients[c_id]._socket);
+	closesocket(objects[c_id]._socket);
 
-	lock_guard<mutex> ll(clients[c_id]._s_lock);
-	clients[c_id]._state = ST_FREE;
+	lock_guard<mutex> ll(objects[c_id]._s_lock);
+	objects[c_id]._state = ST_FREE;
 }
 
 void worker_thread(HANDLE h_iocp)
@@ -295,18 +331,18 @@ void worker_thread(HANDLE h_iocp)
 			int client_id = get_new_client_id();
 			if (client_id != -1) {
 				{
-					lock_guard<mutex> ll(clients[client_id]._s_lock);
-					clients[client_id]._state = ST_ALLOC;
+					lock_guard<mutex> ll(objects[client_id]._s_lock);
+					objects[client_id]._state = ST_ALLOC;
 				}
-				clients[client_id].x = 0;
-				clients[client_id].y = 0;
-				clients[client_id]._id = client_id;
-				clients[client_id]._name[0] = 0;
-				clients[client_id]._prev_remain = 0;
-				clients[client_id]._socket = g_c_socket;
+				objects[client_id].x = 0;
+				objects[client_id].y = 0;
+				objects[client_id]._id = client_id;
+				objects[client_id]._name[0] = 0;
+				objects[client_id]._prev_remain = 0;
+				objects[client_id]._socket = g_c_socket;
 				CreateIoCompletionPort(reinterpret_cast<HANDLE>(g_c_socket),
 					h_iocp, client_id, 0);
-				clients[client_id].do_recv();
+				objects[client_id].do_recv();
 				g_c_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
 			}
 			else {
@@ -318,7 +354,7 @@ void worker_thread(HANDLE h_iocp)
 			break;
 		}
 		case OP_RECV: {
-			int remain_data = num_bytes + clients[key]._prev_remain;
+			int remain_data = num_bytes + objects[key]._prev_remain;
 			char* p = ex_over->_send_buf;
 			while (remain_data > 0) {
 				int packet_size = p[0];
@@ -329,11 +365,11 @@ void worker_thread(HANDLE h_iocp)
 				}
 				else break;
 			}
-			clients[key]._prev_remain = remain_data;
+			objects[key]._prev_remain = remain_data;
 			if (remain_data > 0) {
 				memcpy(ex_over->_send_buf, p, remain_data);
 			}
-			clients[key].do_recv();
+			objects[key].do_recv();
 			break;
 		}
 		case OP_SEND:
@@ -346,11 +382,25 @@ void worker_thread(HANDLE h_iocp)
 void initialize_npc()
 {
 	for (int i = 0; i < MAX_NPC; ++i) {
-		clients[i].x = rand() % W_WIDTH;
-		clients[i].y = rand() % W_HEIGHT;
-		clients[i]._id = i;
-		sprintf_s(clients[i]._name, "N%d", i);
-		clients[i]._state = ST_INGAME;
+		objects[i].x = rand() % W_WIDTH;
+		objects[i].y = rand() % W_HEIGHT;
+		objects[i]._id = i;
+		sprintf_s(objects[i]._name, "N%d", i);
+		objects[i]._state = ST_INGAME;
+		objects[i]._rm_time = chrono::system_clock::now();
+	}
+}
+
+void do_ai()
+{
+	using namespace chrono;
+	while (true) {
+		for (int i = 0; i < MAX_NPC; ++i) {
+			if (objects[i]._rm_time < system_clock::now() - 1s) {
+				objects[i].do_random_move();
+				objects[i]._rm_time = system_clock::now();
+			}
+		}
 	}
 }
 
@@ -377,12 +427,15 @@ int main()
 	AcceptEx(g_s_socket, g_c_socket, g_a_over._send_buf, 0, addr_size + 16, addr_size + 16, 0, &g_a_over._over);
 
 	initialize_npc();
+	thread ai_thread{ do_ai };
+
 	vector <thread> worker_threads;
 	int num_threads = std::thread::hardware_concurrency();
 	for (int i = 0; i < num_threads; ++i)
 		worker_threads.emplace_back(worker_thread, h_iocp);
 	for (auto& th : worker_threads)
 		th.join();
+	ai_thread.join();
 	closesocket(g_s_socket);
 	WSACleanup();
 }
