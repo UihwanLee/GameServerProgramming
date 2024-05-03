@@ -397,6 +397,12 @@ void do_ai()
 	while (true) {
 		for (int i = 0; i < MAX_NPC; ++i) {
 			if (objects[i]._rm_time < system_clock::now() - 1s) {
+				if (i == 1) {
+					auto move_delay = system_clock::now() - objects[i]._rm_time;
+					cout << "NPC[1] move delay = "
+						<< duration_cast<milliseconds>(move_delay).count()
+						<< "ms\n";
+				}
 				objects[i].do_random_move();
 				objects[i]._rm_time = system_clock::now();
 			}
