@@ -127,6 +127,9 @@ public:
 
 array<SESSION, MAX_NPC + MAX_USER> objects;
 
+constexpr int NCP_START = 0;
+constexpr int USER_START = MAX_NPC;
+
 SOCKET g_s_socket, g_c_socket;
 OVER_EXP g_a_over;
 
@@ -306,6 +309,18 @@ void disconnect(int c_id)
 	objects[c_id]._state = ST_FREE;
 }
 
+bool player_exist(int npc_id)
+{
+	for (int i = USER_START; i < USER_START + MAX_USER; ++i)
+	{
+		if (ST_INGAME != objects[i]._state) 
+			continue;
+		if (true == can_see(npc_id, i))
+			return true;
+	}
+	return false;
+}
+
 void worker_thread(HANDLE h_iocp)
 {
 	while (true) {
@@ -380,7 +395,8 @@ void worker_thread(HANDLE h_iocp)
 			delete ex_over;
 			break;
 		case OP_RANDOM_MOVE:
-			objects[key].do_random_move();
+			if(true == player_exist(key))
+				objects[key].do_random_move();
 			delete ex_over;
 			break;
 		}
