@@ -6,6 +6,7 @@
 #include <vector>
 #include <mutex>
 #include <unordered_set>
+#include <queue>
 #include "protocol.h"
 
 #pragma comment(lib, "WS2_32.lib")
@@ -51,6 +52,7 @@ class SESSION {
 public:
 	mutex _s_lock;
 	S_STATE _state;
+	atomic_bool _active;
 	int _id;
 	SOCKET _socket;
 	short	x, y;
@@ -124,6 +126,17 @@ public:
 		do_random_move();
 	}
 };
+
+enum EVENT_TYPE { EV_RANDOM_MOVE, EV_HEAL, EV_ATTACK };
+struct EVENT {
+	int obj_id;
+	chrono::system_clock::time_point wakeup_time;
+	EVENT_TYPE e_type;
+	int target_id;
+};
+
+priority_queue<EVENT> g_event_queue;
+mutex eql;
 
 array<SESSION, MAX_NPC + MAX_USER> objects;
 
@@ -269,6 +282,10 @@ void process_packet(int c_id, char* packet)
 			if (false == can_see(c_id, pl._id)) continue;
 			if (pl._id == c_id) continue;
 			new_viewlist.insert(pl._id);
+			if ((true == pl._is_npc()) && (pl._active == false)) {
+				if(true == atomic_compare_exchange_strong(&pl._active, false, true));
+					add_timer(pl._id, EV_RANDOM_MOVE, 1000);
+			}
 		}
 		objects[c_id].send_move_packet(c_id);
 
@@ -395,8 +412,13 @@ void worker_thread(HANDLE h_iocp)
 			delete ex_over;
 			break;
 		case OP_RANDOM_MOVE:
-			if(true == player_exist(key))
+			if (true == player_exist(key)) {
 				objects[key].do_random_move();
+				add_timer(key, EV_RANDOM_MOVE, 1000);
+			}
+			else {
+				objects[key]._active = false;
+			}
 			delete ex_over;
 			break;
 		}
@@ -412,6 +434,7 @@ void initialize_npc()
 		sprintf_s(objects[i]._name, "N%d", i);
 		objects[i]._state = ST_INGAME;
 		objects[i]._rm_time = chrono::system_clock::now();
+		objects[i]._active = false;
 	}
 }
 
@@ -470,6 +493,24 @@ void do_ai_wk(HANDLE h_iocp)
 			<< "ms.\n";
 		if (hb_time < 1s)
 			this_thread::sleep_for(1s - hb_time);
+	}
+}
+
+void do_timer(HANDLE h_iocp)
+{
+	using namespace chrono;
+	while (true) {
+		eql.lock();
+		EVENT ev = g_event_queue.top();
+		eql.unlock();
+		if (ev.wakeup_time < system_clock::now()) {
+			eql.lock();
+			g_event_queue.pop();
+			eql.unlock();
+			OVER_EXP* ov = new OVER_EXP;
+			ov->_comp_type = OP_RANDOM_MOVE;
+			PostQueuedCompletionStatus(h_iocp, 1, ev.obj_id, &ov->_over);
+		}
 	}
 }
 
