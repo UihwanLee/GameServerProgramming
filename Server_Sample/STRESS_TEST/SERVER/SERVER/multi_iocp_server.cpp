@@ -16,6 +16,8 @@ using namespace std;
 enum COMP_TYPE { OP_ACCEPT, OP_RECV, OP_SEND, OP_RANDOM_MOVE };
 
 constexpr int VIEW_RANGE = 5;		// 실제 클라이언트 시야보다 약간 작게
+constexpr int NCP_START = 0;
+constexpr int USER_START = MAX_NPC;
 
 bool is_npc(int a)
 {
@@ -125,6 +127,11 @@ public:
 	{
 		do_random_move();
 	}
+
+	bool _is_npc()
+	{
+		return (_id >= NCP_START && _id < MAX_NPC);
+	}
 };
 
 enum EVENT_TYPE { EV_RANDOM_MOVE, EV_HEAL, EV_ATTACK };
@@ -139,9 +146,6 @@ priority_queue<EVENT> g_event_queue;
 mutex eql;
 
 array<SESSION, MAX_NPC + MAX_USER> objects;
-
-constexpr int NCP_START = 0;
-constexpr int USER_START = MAX_NPC;
 
 SOCKET g_s_socket, g_c_socket;
 OVER_EXP g_a_over;
@@ -231,6 +235,11 @@ int get_new_client_id()
 			return i;
 	}
 	return -1;
+}
+
+void add_timer(int _id, EVENT_TYPE tpye, int time)
+{
+
 }
 
 void process_packet(int c_id, char* packet)
