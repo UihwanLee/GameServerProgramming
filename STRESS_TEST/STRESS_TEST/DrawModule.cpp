@@ -161,8 +161,6 @@ int DrawGLScene(GLvoid)									// Here's Where We Do All The Drawing
 		x = map(points[i * 2], 0, 2000, -1.25f, 1.25f);
 		y = map(points[i * 2 + 1], -2000, 0, -1.25f, 1.25f);
 
-		std::cout << "x: " << x << ", y: " << y << std::endl;
-
 		glVertex3f(x, y, z);
 	}
 	glEnd();
