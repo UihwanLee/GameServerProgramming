@@ -140,6 +140,11 @@ struct EVENT {
 	chrono::system_clock::time_point wakeup_time;
 	EVENT_TYPE e_type;
 	int target_id;
+
+	constexpr bool operator < (const EVENT& _Left) const
+	{
+		return (wakeup_time > _Left.wakeup_time);
+	}
 };
 
 priority_queue<EVENT> g_event_queue;
@@ -237,9 +242,16 @@ int get_new_client_id()
 	return -1;
 }
 
-void add_timer(int _id, EVENT_TYPE tpye, int time)
+void add_timer(int _id, EVENT_TYPE type, int time)
 {
+	EVENT ev;
+	ev.obj_id = _id;
+	ev.e_type = type;
+	ev.wakeup_time = chrono::system_clock::now() + chrono::milliseconds(time);
 
+	eql.lock();
+	g_event_queue.push(ev);
+	eql.unlock();
 }
 
 void process_packet(int c_id, char* packet)
@@ -292,8 +304,10 @@ void process_packet(int c_id, char* packet)
 			if (pl._id == c_id) continue;
 			new_viewlist.insert(pl._id);
 			if ((true == pl._is_npc()) && (pl._active == false)) {
-				if(true == atomic_compare_exchange_strong(&pl._active, false, true));
+				bool expected = false;
+				if (pl._active.compare_exchange_strong(expected, true)) {
 					add_timer(pl._id, EV_RANDOM_MOVE, 1000);
+				}
 			}
 		}
 		objects[c_id].send_move_packet(c_id);
@@ -302,7 +316,7 @@ void process_packet(int c_id, char* packet)
 			if (0 == old_viewlist.count(p_id)) {
 				objects[c_id].send_add_object_packet(p_id);
 				objects[p_id].send_add_object_packet(c_id);
-			} 
+			}
 			else {
 				objects[p_id].send_move_packet(c_id);
 			}
@@ -326,7 +340,7 @@ void disconnect(int c_id)
 			if (ST_INGAME != pl._state) continue;
 		}
 		if (pl._id == c_id) continue;
-		if (true == can_see(pl._id, c_id)) 
+		if (true == can_see(pl._id, c_id))
 			pl.send_remove_object_packet(c_id);
 	}
 	closesocket(objects[c_id]._socket);
@@ -339,7 +353,7 @@ bool player_exist(int npc_id)
 {
 	for (int i = USER_START; i < USER_START + MAX_USER; ++i)
 	{
-		if (ST_INGAME != objects[i]._state) 
+		if (ST_INGAME != objects[i]._state)
 			continue;
 		if (true == can_see(npc_id, i))
 			return true;
@@ -472,7 +486,7 @@ void do_ai_hb()
 	using namespace chrono;
 	while (true) {
 		auto start_t = system_clock::now();
-		for (int i = 0; i < MAX_NPC; ++i) 
+		for (int i = 0; i < MAX_NPC; ++i)
 			objects[i].heart_beat();
 		auto end_t = system_clock::now();
 		auto hb_time = end_t - start_t;
@@ -505,21 +519,25 @@ void do_ai_wk(HANDLE h_iocp)
 	}
 }
 
+// timer·Î Á¦¾î
 void do_timer(HANDLE h_iocp)
 {
 	using namespace chrono;
 	while (true) {
 		eql.lock();
-		EVENT ev = g_event_queue.top();
-		eql.unlock();
-		if (ev.wakeup_time < system_clock::now()) {
-			eql.lock();
-			g_event_queue.pop();
-			eql.unlock();
-			OVER_EXP* ov = new OVER_EXP;
-			ov->_comp_type = OP_RANDOM_MOVE;
-			PostQueuedCompletionStatus(h_iocp, 1, ev.obj_id, &ov->_over);
+		if (false == g_event_queue.empty())
+		{
+			EVENT ev = g_event_queue.top();
+			if (ev.wakeup_time < system_clock::now()) {
+				eql.lock();
+				g_event_queue.pop();
+				eql.unlock();
+				OVER_EXP* ov = new OVER_EXP;
+				ov->_comp_type = OP_RANDOM_MOVE;
+				PostQueuedCompletionStatus(h_iocp, 1, ev.obj_id, &ov->_over);
+			}
 		}
+		eql.unlock();
 	}
 }
 
@@ -547,7 +565,7 @@ int main()
 	AcceptEx(g_s_socket, g_c_socket, g_a_over._send_buf, 0, addr_size + 16, addr_size + 16, 0, &g_a_over._over);
 
 	initialize_npc();
-	thread ai_thread{ do_ai_wk, h_iocp };
+	thread ai_thread{ do_timer, h_iocp };
 
 	vector <thread> worker_threads;
 	int num_threads = std::thread::hardware_concurrency();
