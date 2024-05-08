@@ -15,6 +15,7 @@
 #include <gl\glu.h>			// Header File For The GLu32 Library
 #include <atomic>
 #include <memory>
+#include <iostream>
 //#include <gl\glaux.h>		// Header File For The Glaux Library
 
 #pragma comment (lib, "opengl32.lib")
@@ -124,6 +125,10 @@ int InitGL(GLvoid)										// All Setup For OpenGL Goes Here
 	return TRUE;										// Initialization Went OK
 }
 
+float map(float x, float in_min, float in_max, float out_min, float out_max) {
+	return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
 int DrawGLScene(GLvoid)									// Here's Where We Do All The Drawing
 {
 	int size = 0;
@@ -152,6 +157,12 @@ int DrawGLScene(GLvoid)									// Here's Where We Do All The Drawing
 		x = points[i * 2] / 200.0f - 1.25f;
 		y = 1.25f - points[i * 2 + 1] / 200.0f;
 		z = -1.0f;
+
+		x = map(points[i * 2], 0, 2000, -1.25f, 1.25f);
+		y = map(points[i * 2 + 1], -2000, 0, -1.25f, 1.25f);
+
+		std::cout << "x: " << x << ", y: " << y << std::endl;
+
 		glVertex3f(x, y, z);
 	}
 	glEnd();
