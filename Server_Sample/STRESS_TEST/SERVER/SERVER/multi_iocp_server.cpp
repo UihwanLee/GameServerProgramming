@@ -529,9 +529,7 @@ void do_timer(HANDLE h_iocp)
 		{
 			EVENT ev = g_event_queue.top();
 			if (ev.wakeup_time < system_clock::now()) {
-				eql.lock();
 				g_event_queue.pop();
-				eql.unlock();
 				OVER_EXP* ov = new OVER_EXP;
 				ov->_comp_type = OP_RANDOM_MOVE;
 				PostQueuedCompletionStatus(h_iocp, 1, ev.obj_id, &ov->_over);
