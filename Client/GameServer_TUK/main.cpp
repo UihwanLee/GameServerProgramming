@@ -60,14 +60,14 @@ void ProcessPacket(char* ptr)
 		SC_ADD_PLAYER_PACKET* my_packet = reinterpret_cast<SC_ADD_PLAYER_PACKET*>(ptr);
 		int id = my_packet->id;
 
+		//std::cout << "Login id: " << my_packet->id << std::endl;
+
 		if (id == g_myid) {
 			m_ObjectManager->setPlayerPosition(g_myid, my_packet->x, my_packet->y);
 		}
-		else if (id < MAX_USER) {
+		else {
 			m_ObjectManager->m_players[id] = m_ObjectManager->creatPlayer();
 			m_ObjectManager->setPlayerPosition(id, my_packet->x, my_packet->y);
-		}
-		else {
 		}
 		break;
 	}
@@ -82,13 +82,8 @@ void ProcessPacket(char* ptr)
 			g_pos_x = my_packet->x;
 			g_pos_y = my_packet->y * -1.0f;
 		}
-		else if (other_id < MAX_USER) {
-			m_ObjectManager->setPlayerPosition(other_id, my_packet->x, my_packet->y);
-			//players[other_id].move(my_packet->x, my_packet->y);
-		}
 		else {
-			//npc[other_id - NPC_START].x = my_packet->x;
-			//npc[other_id - NPC_START].y = my_packet->y;
+			m_ObjectManager->setPlayerPosition(other_id, my_packet->x, my_packet->y);
 		}
 		break;
 	}

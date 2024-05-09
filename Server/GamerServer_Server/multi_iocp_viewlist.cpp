@@ -161,9 +161,6 @@ bool can_see(int a, int b)
 	int dist = (objects[a].x - objects[b].x) * (objects[a].x - objects[b].x) +
 		(objects[a].y - objects[b].y) * (objects[a].y - objects[b].y);
 	return dist <= VIEW_RANGE * VIEW_RANGE;
-
-	//if (abs(objects[a].x - objects[b].x) > VIEW_RANGE) return false;
-	//return (abs(objects[a].y - objects[b].y) <= VIEW_RANGE);
 }
 
 void SESSION::send_move_packet(int c_id)
@@ -268,6 +265,7 @@ void process_packet(int c_id, char* packet)
 		//get_best_sector(&sector_x, &sector_y);
 		int pos_x = rand() % W_WIDTH;
 		int pos_y = rand() & W_HEIGHT;
+		std::cout << objects[c_id]._id << std::endl;
 		objects[c_id].x = pos_x;
 		objects[c_id].y = pos_y;
 		objects[c_id].y = objects[c_id].y * -1.0f;
@@ -407,6 +405,7 @@ void worker_thread(HANDLE h_iocp)
 		switch (ex_over->_comp_type) {
 		case OP_ACCEPT: {
 			int client_id = get_new_client_id();
+			std::cout << client_id << std::endl;
 			if (client_id != -1) {
 				{
 					lock_guard<mutex> ll(objects[client_id]._s_lock);

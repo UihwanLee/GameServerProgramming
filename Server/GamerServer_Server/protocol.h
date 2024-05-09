@@ -3,7 +3,7 @@ constexpr int BUF_SIZE = 200;
 constexpr int NAME_SIZE = 20;
 
 constexpr int MAX_USER = 10000;
-constexpr int MAX_NPC = 10000;
+constexpr int MAX_NPC = 200000;
 
 constexpr int W_WIDTH = 2000;
 constexpr int W_HEIGHT = 2000;
@@ -34,7 +34,7 @@ struct CS_MOVE_PACKET {
 struct SC_LOGIN_INFO_PACKET {
 	unsigned char size;
 	char	type;
-	short	id;
+	int		id;
 	float	x, y;
 	float	cx, cy;
 };
@@ -42,7 +42,7 @@ struct SC_LOGIN_INFO_PACKET {
 struct SC_ADD_PLAYER_PACKET {
 	unsigned char size;
 	char	type;
-	short	id;
+	int		id;
 	float	x, y;
 	char	name[NAME_SIZE];
 };
@@ -50,13 +50,13 @@ struct SC_ADD_PLAYER_PACKET {
 struct SC_REMOVE_PLAYER_PACKET {
 	unsigned char size;
 	char	type;
-	short	id;
+	int		id;
 };
 
 struct SC_MOVE_PLAYER_PACKET {
 	unsigned char size;
 	char	type;
-	short	id;
+	int		id;
 	float	x, y;
 	float   cx, cy;
 	unsigned int move_time;
