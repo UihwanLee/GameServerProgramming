@@ -9,11 +9,18 @@ int main()
 
 	lua_State* L = luaL_newstate();
 	luaL_openlibs(L);
-	luaL_loadbuffer(L, program, strlen(program), "line");
+	luaL_loadfile(L, "dragon.lua");
 	int ret = lua_pcall(L, 0, 0, 0);
 	if (0 != ret) {
 		std::cout << "Error: " << lua_tostring(L, -1);
 		lua_pop(L, 1);
 	}
+
+	lua_getglobal(L, "pos_x");
+	lua_getglobal(L, "pos_y");
+	int pos_x = lua_tonumber(L, -2);
+	int pos_y = lua_tonumber(L, -1);
+	lua_pop(L, 2);
+	std::cout << "POS_X = " << pos_x << ", POS_Y = " << pos_y << std::endl;
 	lua_close(L);
 }
