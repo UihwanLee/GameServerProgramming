@@ -18,6 +18,7 @@ Release 모드에서 실행 주세요!
  - 서버 보드 크기: 2000x2000
  - 클라이언트 전체 보드 13x13
  - VIEW_RANGE : 5 (11x11)
+ - NPC: 200000 마리
 
 실습 기법
  - multi_iocp:			시야 처리 O / 타이머 multiThread 사용
