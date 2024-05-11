@@ -11,18 +11,16 @@ Client - OpenGL / Server - SFML socket 통신
 주의 사항)
 용량 때문에 SFML package를 뺐으니 이를 설치해주세요
 Release 모드에서 실행 주세요!
+클라이언트/STRESS_TEST 접속 시 서버 주소인 127.0.0.1를 입력하고 들어가 주세요!
 
 실습 세팅
  - multi_iocp 서버
- - 서버 보드 크기: 400x400
+ - 서버 보드 크기: 2000x2000
  - 클라이언트 전체 보드 13x13
  - VIEW_RANGE : 5 (11x11)
 
 실습 기법
- - multi_iocp:			시야 처리 X
- - multi_iocp_viewlist:	시야 처리 O
- - multi_iocp_sector:	sector 적용
- - multi_iocp_sector2:	sector 배치 최적화(효울적인 최적화 필요)
+ - multi_iocp:			시야 처리 O / 타이머 multiThread 사용
 
 <동작 처리>
 - 왼쪽 이동
