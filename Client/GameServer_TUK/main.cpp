@@ -16,7 +16,6 @@ constexpr int BUFSIZE = 256;
 // ¼­¹ö 
 GLvoid initServer();
 GLvoid client(int argc, char** argv);
-constexpr char SERVER_ADDR[] = "127.0.0.1";
 
 WSABUF wsabuf;
 WSAOVERLAPPED wsaover;
@@ -50,7 +49,6 @@ void ProcessPacket(char* ptr)
 		g_myid = packet->id;
 		g_pos_x = packet->x;
 		g_pos_y = packet->y * -1.0f;
-		//avatar.show();
 	}
 	break;
 
@@ -58,8 +56,6 @@ void ProcessPacket(char* ptr)
 	{
 		SC_ADD_PLAYER_PACKET* my_packet = reinterpret_cast<SC_ADD_PLAYER_PACKET*>(ptr);
 		int id = my_packet->id;
-
-		//std::cout << "Login id: " << my_packet->id << std::endl;
 
 		if (id == g_myid) {
 			m_ObjectManager->setPlayerPosition(g_myid, my_packet->x, my_packet->y);
@@ -94,12 +90,8 @@ void ProcessPacket(char* ptr)
 		if (other_id == g_myid) {
 			//avatar.hide();
 		}
-		else if (other_id < MAX_USER) {
-			m_ObjectManager->m_players.erase(other_id);
-			//players.erase(other_id);
-		}
 		else {
-			//		npc[other_id - NPC_START].attr &= ~BOB_ATTR_VISIBLE;
+			m_ObjectManager->m_players.erase(other_id);
 		}
 		break;
 	}
