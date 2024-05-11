@@ -75,16 +75,21 @@ void ObjectManager::creatBoard(int *idx)
 	}
 }
 
-Object* ObjectManager::creatPlayer()
+Object* ObjectManager::creatPlayer(int id)
 {
 	Object* player = new Object();
 
 	for (int i = 0; i < 12; i++) player->m_pos.emplace_back(Figure::PlayerVertex[i]);
 	for (int i = 0; i < 6; i++) player->m_index.emplace_back(Figure::RectIndecies[i]);
 
+	// NPC	: 빨간색
+	// PC	: 검정색
+
+	float col = (id >= 200000) ? 0.0f : 1.0f;
+
 	for (int i = 0; i < 4; i++)
 	{
-		player->m_col.emplace_back(0.0f);
+		player->m_col.emplace_back(col);
 		player->m_col.emplace_back(0.0f);
 		player->m_col.emplace_back(0.0f);
 	}

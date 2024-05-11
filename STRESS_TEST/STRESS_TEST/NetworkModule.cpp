@@ -253,6 +253,7 @@ void Worker_Thread()
 constexpr int DELAY_LIMIT = 100;
 constexpr int DELAY_LIMIT2 = 150;
 constexpr int ACCEPT_DELY = 50;
+char SERVER_ADDR[10];
 
 void Adjust_Number_Of_Client()
 {
@@ -294,7 +295,7 @@ void Adjust_Number_Of_Client()
 	ZeroMemory(&ServerAddr, sizeof(SOCKADDR_IN));
 	ServerAddr.sin_family = AF_INET;
 	ServerAddr.sin_port = htons(PORT_NUM);
-	ServerAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+	ServerAddr.sin_addr.s_addr = inet_addr(SERVER_ADDR);
 
 
 	int Result = WSAConnect(g_clients[num_connections].client_socket, (sockaddr*)&ServerAddr, sizeof(ServerAddr), NULL, NULL, NULL, NULL);
@@ -380,6 +381,9 @@ void InitializeNetwork()
 
 	for (int i = 0; i < 6; ++i)
 		worker_threads.push_back(new std::thread{ Worker_Thread });
+
+	std::cout << "서버 주소: ";
+	std::cin.getline(SERVER_ADDR, 10);
 
 	test_thread = thread{ Test_Thread };
 }

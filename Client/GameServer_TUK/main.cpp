@@ -42,9 +42,8 @@ void ProcessPacket(char* ptr)
 	case SC_LOGIN_INFO:
 	{
 		SC_LOGIN_INFO_PACKET* packet = reinterpret_cast<SC_LOGIN_INFO_PACKET*>(ptr);
-		std::cout << "Login id: " << packet->id << std::endl;
 
-		m_ObjectManager->m_players[packet->id] = m_ObjectManager->creatPlayer();
+		m_ObjectManager->m_players[packet->id] = m_ObjectManager->creatPlayer(packet->id);
 		m_ObjectManager->setPlayerPosition(packet->id, packet->x, packet->y);
 		camera = glm::translate(camera, glm::vec3(packet->cx, packet->cy, 0.0f));
 
@@ -66,7 +65,7 @@ void ProcessPacket(char* ptr)
 			m_ObjectManager->setPlayerPosition(g_myid, my_packet->x, my_packet->y);
 		}
 		else {
-			m_ObjectManager->m_players[id] = m_ObjectManager->creatPlayer();
+			m_ObjectManager->m_players[id] = m_ObjectManager->creatPlayer(my_packet->id);
 			m_ObjectManager->setPlayerPosition(id, my_packet->x, my_packet->y);
 		}
 		break;
@@ -232,7 +231,12 @@ GLvoid client_update()
 GLvoid initServer()
 {
 	wcout.imbue(locale("korean"));
-	sf::Socket::Status status = s_socket.connect("127.0.0.1", PORT_NUM);
+
+	char SERVER_ADDR[10];
+	std::cout << "서버 주소: ";
+	std::cin.getline(SERVER_ADDR, 10);
+
+	sf::Socket::Status status = s_socket.connect(SERVER_ADDR, PORT_NUM); // 127.0.0.1
 	s_socket.setBlocking(false);
 
 	if (status != sf::Socket::Done) {

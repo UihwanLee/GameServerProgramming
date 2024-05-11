@@ -21,7 +21,7 @@ public:
 	void createRect(int* idx, highp_vec3 color);
 	void creatBoard(int* idx);
 
-	Object* creatPlayer();
+	Object* creatPlayer(int id);
 	void setPlayerPosition(int idx, float x, float y);
 
 	void setPosition(int idx, float x, float y, float z);
