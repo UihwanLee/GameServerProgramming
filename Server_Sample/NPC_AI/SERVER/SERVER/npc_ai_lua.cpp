@@ -32,7 +32,7 @@ struct TIMER_EVENT {
 };
 concurrency::concurrent_priority_queue<TIMER_EVENT> timer_queue;
 
-enum COMP_TYPE { OP_ACCEPT, OP_RECV, OP_SEND, OP_NPC_MOVE, OP_AI_HELLO };
+enum COMP_TYPE { OP_ACCEPT, OP_RECV, OP_SEND, OP_NPC_MOVE, OP_AI_MOVE };
 class OVER_EXP {
 public:
 	WSAOVERLAPPED _over;
@@ -228,7 +228,7 @@ int get_new_client_id()
 void WakeUpNPC(int npc_id, int waker)
 {
 	OVER_EXP* exover = new OVER_EXP;
-	exover->_comp_type = OP_AI_HELLO;
+	exover->_comp_type = OP_AI_MOVE;
 	exover->_ai_target_obj = waker;
 	PostQueuedCompletionStatus(h_iocp, 1, npc_id, &exover->_over);
 
@@ -493,7 +493,7 @@ void worker_thread(HANDLE h_iocp)
 			delete ex_over;
 		}
 			break;
-		case OP_AI_HELLO: {
+		case OP_AI_MOVE: {
 			clients[key]._ll.lock();
 			auto L = clients[key]._L;
 			lua_getglobal(L, "event_player_move");

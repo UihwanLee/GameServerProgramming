@@ -138,7 +138,7 @@
     <ClInclude Include="protocol.h" />
   </ItemGroup>
   <ItemGroup>
-    <Library Include="C:\TMP\LUA_TEST\LUA_TEST\lua54.lib" />
+    <Library Include="lua54.lib" />
   </ItemGroup>
   <ItemGroup>
     <None Include="npc.lua" />
