@@ -9,11 +9,14 @@
 #include <queue>
 #include "protocol.h"
 
+#include "include/lua.hpp"
+
 #pragma comment(lib, "WS2_32.lib")
 #pragma comment(lib, "MSWSock.lib")
+#pragma comment(lib, "lua54.lib")
 using namespace std;
 
-enum COMP_TYPE { OP_ACCEPT, OP_RECV, OP_SEND, OP_RANDOM_MOVE };
+enum COMP_TYPE { OP_ACCEPT, OP_RECV, OP_SEND, OP_RANDOM_MOVE, OP_AI_MOVE };
 
 constexpr int VIEW_RANGE = 5;		// 실제 클라이언트 시야보다 약간 작게
 constexpr int NCP_START = 0;
@@ -114,6 +117,7 @@ public:
 	}
 	void send_move_packet(int c_id);
 	void send_add_object_packet(int c_id);
+	void send_chat_packet(int c_id, const char* mess);
 	void send_remove_object_packet(int c_id)
 	{
 		if (true == is_npc(_id))
@@ -197,6 +201,17 @@ void SESSION::send_add_object_packet(int c_id)
 	add_packet.y = objects[c_id].y;
 	do_send(&add_packet);
 }
+
+void SESSION::send_chat_packet(int p_id, const char* mess)
+{
+	SC_CHAT_PACKET packet;
+	packet.id = p_id;
+	packet.size = sizeof(packet);
+	packet.type = SC_CHAT;
+	strcpy_s(packet.mess, mess);
+	do_send(&packet);
+}
+
 
 void SESSION::do_random_move()
 {
@@ -464,6 +479,38 @@ void worker_thread(HANDLE h_iocp)
 			break;
 		}
 	}
+}
+
+int API_get_x(lua_State* L)
+{
+	int user_id =
+		(int)lua_tointeger(L, -1);
+	lua_pop(L, 2);
+	int x = objects[user_id].x;
+	lua_pushnumber(L, x);
+	return 1;
+}
+
+int API_get_y(lua_State* L)
+{
+	int user_id =
+		(int)lua_tointeger(L, -1);
+	lua_pop(L, 2);
+	int y = objects[user_id].y;
+	lua_pushnumber(L, y);
+	return 1;
+}
+
+int API_SendMessage(lua_State* L)
+{
+	int my_id = (int)lua_tointeger(L, -3);
+	int user_id = (int)lua_tointeger(L, -2);
+	char* mess = (char*)lua_tostring(L, -1);
+
+	lua_pop(L, 4);
+
+	objects[user_id].send_chat_packet(my_id, mess);
+	return 0;
 }
 
 void initialize_npc()
