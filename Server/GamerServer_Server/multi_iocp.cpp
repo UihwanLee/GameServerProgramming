@@ -71,6 +71,9 @@ public:
 
 	int		_prev_remain;
 	int		_last_move_time;
+
+	lua_State* _L;
+	mutex	_ll;
 public:
 	SESSION()
 	{
@@ -515,6 +518,7 @@ int API_SendMessage(lua_State* L)
 
 void initialize_npc()
 {
+	cout << "NPC intialize begin.\n";
 	for (int i = 0; i < MAX_NPC; ++i) {
 		int pos_x = rand() % W_WIDTH;
 		int pos_y = rand() & W_HEIGHT;
@@ -526,7 +530,22 @@ void initialize_npc()
 		objects[i]._state = ST_INGAME;
 		objects[i]._rm_time = chrono::system_clock::now();
 		objects[i]._active = false;
+
+		auto L = objects[i]._L = luaL_newstate();
+		luaL_openlibs(L);
+		luaL_loadfile(L, "npc.lua");
+		lua_pcall(L, 0, 0, 0);
+
+		lua_getglobal(L, "set_uid");
+		lua_pushnumber(L, i);
+		lua_pcall(L, 1, 0, 0);
+		// lua_pop(L, 1);// eliminate set_uid from stack after call
+
+		lua_register(L, "API_SendMessage", API_SendMessage);
+		lua_register(L, "API_get_x", API_get_x);
+		lua_register(L, "API_get_y", API_get_y);
 	}
+	cout << "NPC initialize end.\n";
 }
 
 // timer·Î Á¦¾î
