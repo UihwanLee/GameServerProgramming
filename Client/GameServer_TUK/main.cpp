@@ -150,7 +150,7 @@ GLvoid update(int value)
 {
 	// 통신 업데이트
 	client_update();
-	
+
 	glutPostRedisplay();
 	glutTimerFunc(30, update, 1);
 }

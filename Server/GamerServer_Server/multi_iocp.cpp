@@ -6,29 +6,22 @@
 #include <vector>
 #include <mutex>
 #include <unordered_set>
-#include <concurrent_priority_queue.h>
 #include <queue>
 #include "protocol.h"
 
-#include "include/lua.hpp"
-
 #pragma comment(lib, "WS2_32.lib")
 #pragma comment(lib, "MSWSock.lib")
-#pragma comment(lib, "lua54.lib")
 using namespace std;
 
-enum COMP_TYPE { OP_ACCEPT, OP_RECV, OP_SEND, OP_RANDOM_MOVE, OP_AI_MOVE };
+enum COMP_TYPE { OP_ACCEPT, OP_RECV, OP_SEND, OP_RANDOM_MOVE };
 
 constexpr int VIEW_RANGE = 5;		// 실제 클라이언트 시야보다 약간 작게
+constexpr int NCP_START = 0;
+constexpr int USER_START = MAX_NPC;
 
-bool is_pc(int object_id)
+bool is_npc(int a)
 {
-	return object_id < MAX_USER;
-}
-
-bool is_npc(int object_id)
-{
-	return !is_pc(object_id);
+	return a < MAX_NPC;
 }
 
 class OVER_EXP {
@@ -37,7 +30,6 @@ public:
 	WSABUF _wsabuf;
 	char _send_buf[BUF_SIZE];
 	COMP_TYPE _comp_type;
-	int _ai_target_obj;
 	OVER_EXP()
 	{
 		_wsabuf.len = BUF_SIZE;
@@ -73,8 +65,6 @@ public:
 	chrono::system_clock::time_point _rm_time;
 	unordered_set<int> view_list;
 	mutex	_vl_l;
-	mutex	_ll;
-	lua_State* _L;
 
 	int		_prev_remain;
 	int		_last_move_time;
@@ -103,6 +93,10 @@ public:
 
 	void do_send(void* packet)
 	{
+		if (true == is_npc(_id)) {
+			cout << "Send to NPC!! Error";
+			return;
+		}
 		OVER_EXP* sdata = new OVER_EXP{ reinterpret_cast<char*>(packet) };
 		WSASend(_socket, &sdata->_wsabuf, 1, 0, 0, &sdata->_over, 0);
 	}
@@ -120,22 +114,24 @@ public:
 	}
 	void send_move_packet(int c_id);
 	void send_add_object_packet(int c_id);
-	void send_chat_packet(int c_id, const char* mess);
 	void send_remove_object_packet(int c_id)
 	{
-		_vl_l.lock();
-		if (view_list.count(c_id))
-			view_list.erase(c_id);
-		else {
-			_vl_l.unlock();
+		if (true == is_npc(_id))
 			return;
-		}
+
+		_vl_l.lock();
+		view_list.erase(c_id);
 		_vl_l.unlock();
 		SC_REMOVE_OBJECT_PACKET p;
 		p.id = c_id;
 		p.size = sizeof(p);
 		p.type = SC_REMOVE_OBJECT;
 		do_send(&p);
+	}
+	void do_random_move();
+	bool _is_npc()
+	{
+		return (_id >= NCP_START && _id < MAX_NPC);
 	}
 };
 
@@ -152,20 +148,19 @@ struct EVENT {
 	}
 };
 
-//priority_queue<EVENT> g_event_queue;
-concurrency::concurrent_priority_queue<EVENT> g_event_queue;
+priority_queue<EVENT> g_event_queue;
 mutex eql;
 
-HANDLE h_iocp;
-array<SESSION, MAX_USER + MAX_NPC> objects;
+array<SESSION, MAX_NPC + MAX_USER> objects;
 
 SOCKET g_s_socket, g_c_socket;
 OVER_EXP g_a_over;
 
-bool can_see(int from, int to)
+bool can_see(int a, int b)
 {
-	if (abs(objects[from].x - objects[to].x) > VIEW_RANGE) return false;
-	return abs(objects[from].y - objects[to].y) <= VIEW_RANGE;
+	int dist = (objects[a].x - objects[b].x) * (objects[a].x - objects[b].x) +
+		(objects[a].y - objects[b].y) * (objects[a].y - objects[b].y);
+	return dist <= VIEW_RANGE * VIEW_RANGE;
 }
 
 void SESSION::send_move_packet(int c_id)
@@ -187,6 +182,12 @@ void SESSION::send_move_packet(int c_id)
 
 void SESSION::send_add_object_packet(int c_id)
 {
+	if (true == is_npc(_id))
+		return;
+
+	_vl_l.lock();
+	view_list.insert(c_id);
+	_vl_l.unlock();
 	SC_ADD_OBJECT_PACKET add_packet;
 	add_packet.id = c_id;
 	strcpy_s(add_packet.name, objects[c_id]._name);
@@ -194,35 +195,17 @@ void SESSION::send_add_object_packet(int c_id)
 	add_packet.type = SC_ADD_OBJECT;
 	add_packet.x = objects[c_id].x;
 	add_packet.y = objects[c_id].y;
-	_vl_l.lock();
-	view_list.insert(c_id);
-	_vl_l.unlock();
 	do_send(&add_packet);
 }
 
-void SESSION::send_chat_packet(int p_id, const char* mess)
+void SESSION::do_random_move()
 {
-	SC_CHAT_PACKET packet;
-	packet.id = p_id;
-	packet.size = sizeof(packet);
-	packet.type = SC_CHAT;
-	strcpy_s(packet.mess, mess);
-	do_send(&packet);
-}
-
-void do_npc_random_move(int npc_id)
-{
-	SESSION& npc = objects[npc_id];
 	unordered_set<int> old_vl;
-	for (auto& obj : objects) {
-		if (ST_INGAME != obj._state) continue;
-		if (true == is_npc(obj._id)) continue;
-		if (true == can_see(npc._id, obj._id))
-			old_vl.insert(obj._id);
+	for (int i = MAX_NPC; i < MAX_NPC + MAX_USER; ++i) {
+		if (objects[i]._state != ST_INGAME) continue;
+		if (true == can_see(i, _id)) old_vl.insert(i);
 	}
 
-	int x = npc.x;
-	int y = npc.y;
 	switch (rand() % 4)
 	{
 	case 0: { if (y < 0) { y += 1.0f; } break; }
@@ -232,40 +215,26 @@ void do_npc_random_move(int npc_id)
 	}
 
 	unordered_set<int> new_vl;
-	for (auto& obj : objects) {
-		if (ST_INGAME != obj._state) continue;
-		if (true == is_npc(obj._id)) continue;
-		if (true == can_see(npc._id, obj._id))
-			new_vl.insert(obj._id);
+	for (int i = MAX_NPC; i < MAX_NPC + MAX_USER; ++i) {
+		if (objects[i]._state != ST_INGAME) continue;
+		if (true == can_see(i, _id)) new_vl.insert(i);
 	}
 
 	for (auto pl : new_vl) {
-		if (0 == old_vl.count(pl)) {
-			// 플레이어의 시야에 등장
-			objects[pl].send_add_object_packet(npc._id);
-		}
-		else {
-			// 플레이어가 계속 보고 있음.
-			objects[pl].send_move_packet(npc._id);
-		}
+		if (0 == old_vl.count(pl))
+			objects[pl].send_add_object_packet(_id);
+		else
+			objects[pl].send_move_packet(_id);
 	}
 	for (auto pl : old_vl) {
-		if (0 == new_vl.count(pl)) {
-			objects[pl]._vl_l.lock();
-			if (0 != objects[pl].view_list.count(npc._id)) {
-				objects[pl]._vl_l.unlock();
-				objects[pl].send_remove_object_packet(npc._id);
-			}
-			else {
-				objects[pl]._vl_l.unlock();
-			}
-		}
+		if (0 == new_vl.count(pl))
+			objects[pl].send_remove_object_packet(_id);
 	}
 }
 
 int get_new_client_id()
 {
-	for (int i = 0; i < MAX_USER; ++i) {
+	for (int i = MAX_NPC; i < MAX_NPC + MAX_USER; ++i) {
 		lock_guard <mutex> ll{ objects[i]._s_lock };
 		if (objects[i]._state == ST_FREE)
 			return i;
@@ -273,31 +242,16 @@ int get_new_client_id()
 	return -1;
 }
 
-//void add_timer(int _id, EVENT_TYPE type, int time)
-//{
-//	EVENT ev;
-//	ev.obj_id = _id;
-//	ev.e_type = type;
-//	ev.wakeup_time = chrono::system_clock::now() + chrono::milliseconds(time);
-//
-//	eql.lock();
-//	g_event_queue.push(ev);
-//	eql.unlock();
-//}
-
-void WakeUpNPC(int npc_id, int waker)
+void add_timer(int _id, EVENT_TYPE type, int time)
 {
-	OVER_EXP* exover = new OVER_EXP;
-	exover->_comp_type = OP_AI_MOVE;
-	exover->_ai_target_obj = waker;
-	PostQueuedCompletionStatus(h_iocp, 1, npc_id, &exover->_over);
+	EVENT ev;
+	ev.obj_id = _id;
+	ev.e_type = type;
+	ev.wakeup_time = chrono::system_clock::now() + chrono::milliseconds(time);
 
-	if (objects[npc_id]._active) return;
-	bool old_state = false;
-	if (false == atomic_compare_exchange_strong(&objects[npc_id]._active, &old_state, true))
-		return;
-	EVENT ev{npc_id, chrono::system_clock::now(), EV_RANDOM_MOVE, 0};
+	eql.lock();
 	g_event_queue.push(ev);
+	eql.unlock();
 }
 
 void process_packet(int c_id, char* packet)
@@ -317,18 +271,21 @@ void process_packet(int c_id, char* packet)
 		objects[c_id].cx = objects[c_id].x * -1.0f;
 		objects[c_id].cy = objects[c_id].y * -1.0f;
 		objects[c_id].send_login_info_packet();
+		{
+			lock_guard<mutex> ll{ objects[c_id]._s_lock };
+			objects[c_id]._state = ST_INGAME;
+		}
 		for (auto& pl : objects) {
 			{
 				lock_guard<mutex> ll(pl._s_lock);
 				if (ST_INGAME != pl._state) continue;
 			}
 			if (pl._id == c_id) continue;
-			if (false == can_see(c_id, pl._id))
-				continue;
-			if (is_pc(pl._id)) pl.send_add_object_packet(c_id);
-			else WakeUpNPC(pl._id, c_id);
+			if (false == can_see(pl._id, c_id)) continue;
+			pl.send_add_object_packet(c_id);
 			objects[c_id].send_add_object_packet(pl._id);
 		}
+
 		break;
 	}
 	case CS_MOVE: {
@@ -357,64 +314,67 @@ void process_packet(int c_id, char* packet)
 		objects[c_id]._vl_l.unlock();
 		unordered_set<int> new_viewlist;
 
-		for (auto& cl : objects) {
-			if (cl._state != ST_INGAME) continue;
-			if (cl._id == c_id) continue;
-			if (can_see(c_id, cl._id))
-				new_viewlist.insert(cl._id);
+		for (auto& pl : objects) {
+			if (pl._state != ST_INGAME) continue;
+			if (false == can_see(c_id, pl._id)) continue;
+			if (pl._id == c_id) continue;
+			new_viewlist.insert(pl._id);
+			if ((true == pl._is_npc()) && (pl._active == false)) {
+				bool expected = false;
+				if (pl._active.compare_exchange_strong(expected, true)) {
+					add_timer(pl._id, EV_RANDOM_MOVE, 1000);
+				}
+			}
 		}
-
 		objects[c_id].send_move_packet(c_id);
 
-		for (auto& pl : new_viewlist) {
-			auto& cpl = objects[pl];
-			if (is_pc(pl)) {
-				cpl._vl_l.lock();
-				if (objects[pl].view_list.count(c_id)) {
-					cpl._vl_l.unlock();
-					objects[pl].send_move_packet(c_id);
-				}
-				else {
-					cpl._vl_l.unlock();
-					objects[pl].send_add_object_packet(c_id);
-				}
+		for (int p_id : new_viewlist) {
+			if (0 == old_viewlist.count(p_id)) {
+				objects[c_id].send_add_object_packet(p_id);
+				objects[p_id].send_add_object_packet(c_id);
 			}
-			else WakeUpNPC(pl, c_id);
-
-			if (old_viewlist.count(pl) == 0)
-				objects[c_id].send_add_object_packet(pl);
+			else {
+				objects[p_id].send_move_packet(c_id);
+			}
 		}
 
-		for (auto& pl : old_viewlist)
-			if (0 == new_viewlist.count(pl)) {
-				objects[c_id].send_remove_object_packet(pl);
-				if (is_pc(pl))
-					objects[pl].send_remove_object_packet(c_id);
+		for (int p_id : old_viewlist) {
+			if (0 == new_viewlist.count(p_id)) {
+				objects[c_id].send_remove_object_packet(p_id);
+				objects[p_id].send_remove_object_packet(c_id);
 			}
+		}
 	}
-				break;
 	}
 }
 
 void disconnect(int c_id)
 {
-	objects[c_id]._vl_l.lock();
-	unordered_set <int> vl = objects[c_id].view_list;
-	objects[c_id]._vl_l.unlock();
-	for (auto& p_id : vl) {
-		if (is_npc(p_id)) continue;
-		auto& pl = objects[p_id];
+	for (auto& pl : objects) {
 		{
 			lock_guard<mutex> ll(pl._s_lock);
 			if (ST_INGAME != pl._state) continue;
 		}
 		if (pl._id == c_id) continue;
-		pl.send_remove_object_packet(c_id);
+		if (true == can_see(pl._id, c_id))
+			pl.send_remove_object_packet(c_id);
 	}
 	closesocket(objects[c_id]._socket);
 
 	lock_guard<mutex> ll(objects[c_id]._s_lock);
 	objects[c_id]._state = ST_FREE;
+}
+
+bool player_exist(int npc_id)
+{
+	for (int i = USER_START; i < USER_START + MAX_USER; ++i)
+	{
+		if (ST_INGAME != objects[i]._state)
+			continue;
+		if (true == can_see(npc_id, i))
+			return true;
+	}
+	return false;
 }
 
 void worker_thread(HANDLE h_iocp)
@@ -492,94 +452,23 @@ void worker_thread(HANDLE h_iocp)
 		case OP_SEND:
 			delete ex_over;
 			break;
-		case OP_RANDOM_MOVE: {
-			bool keep_alive = false;
-			for (int j = 0; j < MAX_USER; ++j) {
-				if (objects[j]._state != ST_INGAME) continue;
-				if (can_see(static_cast<int>(key), j)) {
-					keep_alive = true;
-					break;
-				}
-			}
-			if (true == keep_alive) {
-				do_npc_random_move(static_cast<int>(key));
-				EVENT ev{ key, chrono::system_clock::now() + 1s, EV_RANDOM_MOVE, 0 };
-				g_event_queue.push(ev);
+		case OP_RANDOM_MOVE:
+			if (true == player_exist(key)) {
+				objects[key].do_random_move();
+				add_timer(key, EV_RANDOM_MOVE, 1000);
 			}
 			else {
 				objects[key]._active = false;
 			}
 			delete ex_over;
-		}
 			break;
-		case OP_AI_MOVE: {
-			objects[key]._ll.lock();
-			auto L = objects[key]._L;
-			lua_getglobal(L, "event_player_move");
-			lua_pushnumber(L, ex_over->_ai_target_obj);
-			lua_pcall(L, 1, 0, 0);
-			//lua_pop(L, 1);
-			objects[key]._ll.unlock();
-			delete ex_over;
 		}
-					   break;
-		}
-
 	}
 }
 
-//void initialize_npc()
-//{
-//	for (int i = 0; i < MAX_NPC; ++i) {
-//		int pos_x = rand() % W_WIDTH;
-//		int pos_y = rand() & W_HEIGHT;
-//		objects[i].x = pos_x;
-//		objects[i].y = pos_y;
-//		objects[i].y = objects[i].y * -1.0f;
-//		objects[i]._id = i;
-//		sprintf_s(objects[i]._name, "N%d", i);
-//		objects[i]._state = ST_INGAME;
-//		objects[i]._rm_time = chrono::system_clock::now();
-//		objects[i]._active = false;
-//	}
-//}
-
-int API_get_x(lua_State* L)
+void initialize_npc()
 {
-	int user_id =
-		(int)lua_tointeger(L, -1);
-	lua_pop(L, 2);
-	int x = objects[user_id].x;
-	lua_pushnumber(L, x);
-	return 1;
-}
-
-int API_get_y(lua_State* L)
-{
-	int user_id =
-		(int)lua_tointeger(L, -1);
-	lua_pop(L, 2);
-	int y = objects[user_id].y;
-	lua_pushnumber(L, y);
-	return 1;
-}
-
-int API_SendMessage(lua_State* L)
-{
-	int my_id = (int)lua_tointeger(L, -3);
-	int user_id = (int)lua_tointeger(L, -2);
-	char* mess = (char*)lua_tostring(L, -1);
-
-	lua_pop(L, 4);
-
-	objects[user_id].send_chat_packet(my_id, mess);
-	return 0;
-}
-
-void InitializeNPC()
-{
-	cout << "NPC intialize begin.\n";
-	for (int i = MAX_USER; i < MAX_USER + MAX_NPC; ++i) {
+	for (int i = 0; i < MAX_NPC; ++i) {
 		int pos_x = rand() % W_WIDTH;
 		int pos_y = rand() & W_HEIGHT;
 		objects[i].x = pos_x;
@@ -588,72 +477,36 @@ void InitializeNPC()
 		objects[i]._id = i;
 		sprintf_s(objects[i]._name, "N%d", i);
 		objects[i]._state = ST_INGAME;
-
-		auto L = objects[i]._L = luaL_newstate();
-		luaL_openlibs(L);
-		luaL_loadfile(L, "npc.lua");
-		lua_pcall(L, 0, 0, 0);
-
-		lua_getglobal(L, "set_uid");
-		lua_pushnumber(L, i);
-		lua_pcall(L, 1, 0, 0);
-		// lua_pop(L, 1);// eliminate set_uid from stack after call
-
-		lua_register(L, "API_SendMessage", API_SendMessage);
-		lua_register(L, "API_get_x", API_get_x);
-		lua_register(L, "API_get_y", API_get_y);
+		objects[i]._rm_time = chrono::system_clock::now();
+		objects[i]._active = false;
 	}
-	cout << "NPC initialize end.\n";
 }
 
 // timer로 제어
-//void do_timer()
-//{
-//	using namespace chrono;
-//	while (true) {
-//		eql.lock();
-//		if (false == g_event_queue.empty())
-//		{
-//			EVENT ev = g_event_queue.top();
-//			if (ev.wakeup_time < system_clock::now()) {
-//				g_event_queue.pop();
-//				OVER_EXP* ov = new OVER_EXP;
-//				ov->_comp_type = OP_RANDOM_MOVE;
-//				PostQueuedCompletionStatus(h_iocp, 1, ev.obj_id, &ov->_over);
-//			}
-//		}
-//		eql.unlock();
-//	}
-//}
-
-void do_timer()
+void do_timer(HANDLE h_iocp)
 {
+	using namespace chrono;
 	while (true) {
-		EVENT ev;
-		auto current_time = chrono::system_clock::now();
-		if (true == g_event_queue.try_pop(ev)) {
-			if (ev.wakeup_time > current_time) {
-				g_event_queue.push(ev);		// 최적화 필요
-				// timer_queue에 다시 넣지 않고 처리해야 한다.
-				this_thread::sleep_for(1ms);  // 실행시간이 아직 안되었으므로 잠시 대기
-				continue;
-			}
-			switch (ev.e_type) {
-			case EV_RANDOM_MOVE:
+		eql.lock();
+		if (false == g_event_queue.empty())
+		{
+			EVENT ev = g_event_queue.top();
+			if (ev.wakeup_time < system_clock::now()) {
+				g_event_queue.pop();
 				OVER_EXP* ov = new OVER_EXP;
 				ov->_comp_type = OP_RANDOM_MOVE;
 				PostQueuedCompletionStatus(h_iocp, 1, ev.obj_id, &ov->_over);
-				break;
 			}
-			continue;		// 즉시 다음 작업 꺼내기
 		}
-		this_thread::sleep_for(1ms);   // timer_queue가 비어 있으니 잠시 기다렸다가 다시 시작
+		eql.unlock();
 	}
 }
 
 
 int main()
 {
+	HANDLE h_iocp;
+
 	WSADATA WSAData;
 	WSAStartup(MAKEWORD(2, 2), &WSAData);
 	g_s_socket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED);
@@ -672,14 +525,15 @@ int main()
 	g_a_over._comp_type = OP_ACCEPT;
 	AcceptEx(g_s_socket, g_c_socket, g_a_over._send_buf, 0, addr_size + 16, addr_size + 16, 0, &g_a_over._over);
 
-	InitializeNPC();
+	initialize_npc();
+	thread ai_thread{ do_timer, h_iocp };
+
 	vector <thread> worker_threads;
 	int num_threads = std::thread::hardware_concurrency();
 	for (int i = 0; i < num_threads; ++i)
 		worker_threads.emplace_back(worker_thread, h_iocp);
 	for (auto& th : worker_threads)
 		th.join();
-	thread ai_thread{ do_timer };
 	ai_thread.join();
 	closesocket(g_s_socket);
 	WSACleanup();

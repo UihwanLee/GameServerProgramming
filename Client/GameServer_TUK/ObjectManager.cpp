@@ -85,7 +85,7 @@ Object* ObjectManager::creatPlayer(int id)
 	// NPC	: 빨간색
 	// PC	: 검정색
 
-	float col = (id <= 10000) ? 0.0f : 1.0f;
+	float col = (id >= 200000) ? 0.0f : 1.0f;
 
 	for (int i = 0; i < 4; i++)
 	{
