@@ -33,6 +33,7 @@ public:
 	WSABUF _wsabuf;
 	char _send_buf[BUF_SIZE];
 	COMP_TYPE _comp_type;
+	int _ai_target_obj;
 	OVER_EXP()
 	{
 		_wsabuf.len = BUF_SIZE;
@@ -480,6 +481,18 @@ void worker_thread(HANDLE h_iocp)
 			}
 			delete ex_over;
 			break;
+		case OP_AI_MOVE: {
+			objects[key]._ll.lock();
+			auto L = objects[key]._L;
+			lua_getglobal(L, "event_player_move");
+			lua_pushnumber(L, ex_over->_ai_target_obj);
+			lua_pcall(L, 1, 0, 0);
+			//lua_pop(L, 1);
+			objects[key]._ll.unlock();
+			delete ex_over;
+		}
+					   break;
+
 		}
 	}
 }
