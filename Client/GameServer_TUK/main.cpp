@@ -52,9 +52,9 @@ void ProcessPacket(char* ptr)
 	}
 	break;
 
-	case SC_ADD_PLAYER:
+	case SC_ADD_OBJECT:
 	{
-		SC_ADD_PLAYER_PACKET* my_packet = reinterpret_cast<SC_ADD_PLAYER_PACKET*>(ptr);
+		SC_ADD_OBJECT_PACKET* my_packet = reinterpret_cast<SC_ADD_OBJECT_PACKET*>(ptr);
 		int id = my_packet->id;
 
 		if (id == g_myid) {
@@ -66,9 +66,9 @@ void ProcessPacket(char* ptr)
 		}
 		break;
 	}
-	case SC_MOVE_PLAYER:
+	case SC_MOVE_OBJECT:
 	{
-		SC_MOVE_PLAYER_PACKET* my_packet = reinterpret_cast<SC_MOVE_PLAYER_PACKET*>(ptr);
+		SC_MOVE_OBJECT_PACKET* my_packet = reinterpret_cast<SC_MOVE_OBJECT_PACKET*>(ptr);
 		int other_id = my_packet->id;
 		if (other_id == g_myid) {
 			camera = glm::translate(camera, glm::vec3(my_packet->cx, my_packet->cy, 0.0f));
@@ -83,9 +83,9 @@ void ProcessPacket(char* ptr)
 		break;
 	}
 
-	case SC_REMOVE_PLAYER:
+	case SC_REMOVE_OBJECT:
 	{
-		SC_REMOVE_PLAYER_PACKET* my_packet = reinterpret_cast<SC_REMOVE_PLAYER_PACKET*>(ptr);
+		SC_REMOVE_OBJECT_PACKET* my_packet = reinterpret_cast<SC_REMOVE_OBJECT_PACKET*>(ptr);
 		int other_id = my_packet->id;
 		if (other_id == g_myid) {
 			//avatar.hide();

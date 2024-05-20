@@ -20,8 +20,6 @@ using namespace std;
 enum COMP_TYPE { OP_ACCEPT, OP_RECV, OP_SEND, OP_RANDOM_MOVE, OP_AI_MOVE };
 
 constexpr int VIEW_RANGE = 5;		// 실제 클라이언트 시야보다 약간 작게
-constexpr int NCP_START = 0;
-constexpr int USER_START = MAX_NPC;
 
 bool is_pc(int object_id)
 {
@@ -105,10 +103,6 @@ public:
 
 	void do_send(void* packet)
 	{
-		if (true == is_npc(_id)) {
-			cout << "Send to NPC!! Error";
-			return;
-		}
 		OVER_EXP* sdata = new OVER_EXP{ reinterpret_cast<char*>(packet) };
 		WSASend(_socket, &sdata->_wsabuf, 1, 0, 0, &sdata->_over, 0);
 	}
@@ -129,21 +123,19 @@ public:
 	void send_chat_packet(int c_id, const char* mess);
 	void send_remove_object_packet(int c_id)
 	{
-		if (true == is_npc(_id))
-			return;
-
 		_vl_l.lock();
-		view_list.erase(c_id);
+		if (view_list.count(c_id))
+			view_list.erase(c_id);
+		else {
+			_vl_l.unlock();
+			return;
+		}
 		_vl_l.unlock();
-		SC_REMOVE_PLAYER_PACKET p;
+		SC_REMOVE_OBJECT_PACKET p;
 		p.id = c_id;
 		p.size = sizeof(p);
-		p.type = SC_REMOVE_PLAYER;
+		p.type = SC_REMOVE_OBJECT;
 		do_send(&p);
-	}
-	bool _is_npc()
-	{
-		return (_id >= NCP_START && _id < MAX_NPC);
 	}
 };
 
@@ -165,16 +157,15 @@ concurrency::concurrent_priority_queue<EVENT> g_event_queue;
 mutex eql;
 
 HANDLE h_iocp;
-array<SESSION, MAX_NPC + MAX_USER> objects;
+array<SESSION, MAX_USER + MAX_NPC> objects;
 
 SOCKET g_s_socket, g_c_socket;
 OVER_EXP g_a_over;
 
-bool can_see(int a, int b)
+bool can_see(int from, int to)
 {
-	int dist = (objects[a].x - objects[b].x) * (objects[a].x - objects[b].x) +
-		(objects[a].y - objects[b].y) * (objects[a].y - objects[b].y);
-	return dist <= VIEW_RANGE * VIEW_RANGE;
+	if (abs(objects[from].x - objects[to].x) > VIEW_RANGE) return false;
+	return abs(objects[from].y - objects[to].y) <= VIEW_RANGE;
 }
 
 void SESSION::send_move_packet(int c_id)
@@ -182,10 +173,10 @@ void SESSION::send_move_packet(int c_id)
 	if (true == is_npc(_id))
 		return;
 
-	SC_MOVE_PLAYER_PACKET p;
+	SC_MOVE_OBJECT_PACKET p;
 	p.id = c_id;
-	p.size = sizeof(SC_MOVE_PLAYER_PACKET);
-	p.type = SC_MOVE_PLAYER;
+	p.size = sizeof(SC_MOVE_OBJECT_PACKET);
+	p.type = SC_MOVE_OBJECT;
 	p.x = objects[c_id].x;
 	p.y = objects[c_id].y;
 	p.cx = objects[c_id].cx;
@@ -196,19 +187,16 @@ void SESSION::send_move_packet(int c_id)
 
 void SESSION::send_add_object_packet(int c_id)
 {
-	if (true == is_npc(_id))
-		return;
-
-	_vl_l.lock();
-	view_list.insert(c_id);
-	_vl_l.unlock();
-	SC_ADD_PLAYER_PACKET add_packet;
+	SC_ADD_OBJECT_PACKET add_packet;
 	add_packet.id = c_id;
 	strcpy_s(add_packet.name, objects[c_id]._name);
 	add_packet.size = sizeof(add_packet);
-	add_packet.type = SC_ADD_PLAYER;
+	add_packet.type = SC_ADD_OBJECT;
 	add_packet.x = objects[c_id].x;
 	add_packet.y = objects[c_id].y;
+	_vl_l.lock();
+	view_list.insert(c_id);
+	_vl_l.unlock();
 	do_send(&add_packet);
 }
 
@@ -277,7 +265,7 @@ void do_npc_random_move(int npc_id)
 
 int get_new_client_id()
 {
-	for (int i = MAX_NPC; i < MAX_NPC + MAX_USER; ++i) {
+	for (int i = 0; i < MAX_USER; ++i) {
 		lock_guard <mutex> ll{ objects[i]._s_lock };
 		if (objects[i]._state == ST_FREE)
 			return i;
@@ -329,21 +317,18 @@ void process_packet(int c_id, char* packet)
 		objects[c_id].cx = objects[c_id].x * -1.0f;
 		objects[c_id].cy = objects[c_id].y * -1.0f;
 		objects[c_id].send_login_info_packet();
-		{
-			lock_guard<mutex> ll{ objects[c_id]._s_lock };
-			objects[c_id]._state = ST_INGAME;
-		}
 		for (auto& pl : objects) {
 			{
 				lock_guard<mutex> ll(pl._s_lock);
 				if (ST_INGAME != pl._state) continue;
 			}
 			if (pl._id == c_id) continue;
-			if (false == can_see(pl._id, c_id)) continue;
-			pl.send_add_object_packet(c_id);
+			if (false == can_see(c_id, pl._id))
+				continue;
+			if (is_pc(pl._id)) pl.send_add_object_packet(c_id);
+			else WakeUpNPC(pl._id, c_id);
 			objects[c_id].send_add_object_packet(pl._id);
 		}
-
 		break;
 	}
 	case CS_MOVE: {
@@ -413,31 +398,23 @@ void process_packet(int c_id, char* packet)
 
 void disconnect(int c_id)
 {
-	for (auto& pl : objects) {
+	objects[c_id]._vl_l.lock();
+	unordered_set <int> vl = objects[c_id].view_list;
+	objects[c_id]._vl_l.unlock();
+	for (auto& p_id : vl) {
+		if (is_npc(p_id)) continue;
+		auto& pl = objects[p_id];
 		{
 			lock_guard<mutex> ll(pl._s_lock);
 			if (ST_INGAME != pl._state) continue;
 		}
 		if (pl._id == c_id) continue;
-		if (true == can_see(pl._id, c_id))
-			pl.send_remove_object_packet(c_id);
+		pl.send_remove_object_packet(c_id);
 	}
 	closesocket(objects[c_id]._socket);
 
 	lock_guard<mutex> ll(objects[c_id]._s_lock);
 	objects[c_id]._state = ST_FREE;
-}
-
-bool player_exist(int npc_id)
-{
-	for (int i = USER_START; i < USER_START + MAX_USER; ++i)
-	{
-		if (ST_INGAME != objects[i]._state)
-			continue;
-		if (true == can_see(npc_id, i))
-			return true;
-	}
-	return false;
 }
 
 void worker_thread(HANDLE h_iocp)

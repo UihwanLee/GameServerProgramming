@@ -18,9 +18,9 @@ constexpr char CS_TELEPORT = 4;			// RANDOM한 위치로 Teleport, Stress Test할 때 
 constexpr char CS_LOGOUT = 5;			// 클라이언트에서 정상적으로 접속을 종료하는 패킷
 
 constexpr char SC_LOGIN_INFO = 2;
-constexpr char SC_ADD_PLAYER = 3;
-constexpr char SC_REMOVE_PLAYER = 4;
-constexpr char SC_MOVE_PLAYER = 5;
+constexpr char SC_ADD_OBJECT = 3;
+constexpr char SC_REMOVE_OBJECT = 4;
+constexpr char SC_MOVE_OBJECT = 5;
 constexpr char SC_CHAT = 6;
 constexpr char SC_LOGIN_OK = 7;
 constexpr char SC_LOGIN_FAIL = 8;
@@ -64,7 +64,7 @@ struct SC_LOGIN_INFO_PACKET {
 	float	cx, cy;
 };
 
-struct SC_ADD_PLAYER_PACKET {
+struct SC_ADD_OBJECT_PACKET {
 	unsigned char size;
 	char	type;
 	int		id;
@@ -72,13 +72,13 @@ struct SC_ADD_PLAYER_PACKET {
 	char	name[NAME_SIZE];
 };
 
-struct SC_REMOVE_PLAYER_PACKET {
+struct SC_REMOVE_OBJECT_PACKET {
 	unsigned char size;
 	char	type;
 	int		id;
 };
 
-struct SC_MOVE_PLAYER_PACKET {
+struct SC_MOVE_OBJECT_PACKET {
 	unsigned char size;
 	char	type;
 	int		id;
