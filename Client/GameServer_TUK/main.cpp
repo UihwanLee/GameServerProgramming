@@ -95,6 +95,22 @@ void ProcessPacket(char* ptr)
 		}
 		break;
 	}
+
+	case SC_CHAT:
+	{
+		SC_CHAT_PACKET* my_packet = reinterpret_cast<SC_CHAT_PACKET*>(ptr);
+		int other_id = my_packet->id;
+		if (other_id == g_myid) {
+			//avatar.set_chat(my_packet->mess);
+		}
+		else {
+			std::cout << my_packet->mess << std::endl;
+			//objects[other_id].set_chat(my_packet->mess);
+		}
+
+		break;
+	}
+
 	default:
 		printf("Unknown PACKET type [%d]\n", ptr[1]);
 	}
@@ -224,9 +240,9 @@ GLvoid initServer()
 {
 	wcout.imbue(locale("korean"));
 
-	char SERVER_ADDR[10];
-	std::cout << "辑滚 林家: ";
-	std::cin.getline(SERVER_ADDR, 10);
+	char SERVER_ADDR[10] = "127.0.0.1";
+	//std::cout << "辑滚 林家: ";
+	//std::cin.getline(SERVER_ADDR, 10);
 
 	sf::Socket::Status status = s_socket.connect(SERVER_ADDR, PORT_NUM); // 127.0.0.1
 	s_socket.setBlocking(false);

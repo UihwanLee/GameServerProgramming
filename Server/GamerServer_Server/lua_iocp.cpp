@@ -177,10 +177,11 @@ bool is_npc(int object_id)
 	return !is_pc(object_id);
 }
 
-bool can_see(int from, int to)
+bool can_see(int a, int b)
 {
-	if (abs(objects[from].x - objects[to].x) > VIEW_RANGE) return false;
-	return abs(objects[from].y - objects[to].y) <= VIEW_RANGE;
+	int dist = (objects[a].x - objects[b].x) * (objects[a].x - objects[b].x) +
+		(objects[a].y - objects[b].y) * (objects[a].y - objects[b].y);
+	return dist <= VIEW_RANGE * VIEW_RANGE;
 }
 
 void SESSION::send_move_packet(int c_id)
@@ -390,10 +391,11 @@ void do_npc_random_move(int npc_id)
 
 	unordered_set<int> new_vl;
 	for (auto& obj : objects) {
-		if (ST_INGAME != obj._state) continue;
+		//if (ST_INGAME != obj._state) continue;
 		if (true == is_npc(obj._id)) continue;
-		if (true == can_see(npc._id, obj._id))
+		if (true == can_see(npc._id, obj._id)) {
 			new_vl.insert(obj._id);
+		}
 	}
 
 	for (auto pl : new_vl) {
@@ -499,7 +501,7 @@ void worker_thread(HANDLE h_iocp)
 		case OP_NPC_MOVE: {
 			bool keep_alive = false;
 			for (int j = 0; j < MAX_USER; ++j) {
-				if (objects[j]._state != ST_INGAME) continue;
+				//if (objects[j]._state != ST_INGAME) continue;
 				if (can_see(static_cast<int>(key), j)) {
 					keep_alive = true;
 					break;
@@ -568,8 +570,11 @@ void InitializeNPC()
 {
 	cout << "NPC intialize begin.\n";
 	for (int i = MAX_USER; i < MAX_USER + MAX_NPC; ++i) {
-		objects[i].x = rand() % W_WIDTH;
-		objects[i].y = rand() % W_HEIGHT;
+		int pos_x = rand() % W_WIDTH;
+		int pos_y = rand() & W_HEIGHT;
+		objects[i].x = pos_x;
+		objects[i].y = pos_y;
+		objects[i].y = objects[i].y * -1.0f;
 		objects[i]._id = i;
 		sprintf_s(objects[i]._name, "NPC%d", i);
 		objects[i]._state = ST_INGAME;
