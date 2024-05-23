@@ -6,12 +6,22 @@
 
 #include <SFML/Network.hpp>
 
+#include <windows.h>		// Header File For Windows
+#include <math.h>			// Header File For Windows Math Library
+#include <stdio.h>			// Header File For Standard Input/Output
+#include <stdarg.h>			// Header File For Variable Argument Routines
+#include <gl\gl.h>			// Header File For The OpenGL32 Library
+#include <gl\glu.h>			// Header File For The GLu32 Library
+
 #include "..\..\Server\GamerServer_Server\protocol.h"
+
+#define DEFAULTFONTSIZE 20
 
 sf::TcpSocket s_socket;
 
 constexpr short PORT = 4000;
 constexpr int BUFSIZE = 256;
+
 
 // 서버 
 GLvoid initServer();
@@ -96,16 +106,16 @@ void ProcessPacket(char* ptr)
 		break;
 	}
 
-	case SC_CHAT:
+	case SC_EVENT:
 	{
-		SC_CHAT_PACKET* my_packet = reinterpret_cast<SC_CHAT_PACKET*>(ptr);
+		SC_EVENT_PACKET* my_packet = reinterpret_cast<SC_EVENT_PACKET*>(ptr);
 		int other_id = my_packet->id;
 		if (other_id == g_myid) {
 			//avatar.set_chat(my_packet->mess);
 		}
 		else {
+			// CHAT 표시 후 랜덤 이동
 			std::cout << my_packet->mess << std::endl;
-			//objects[other_id].set_chat(my_packet->mess);
 		}
 
 		break;

@@ -32,7 +32,7 @@ struct TIMER_EVENT {
 };
 concurrency::concurrent_priority_queue<TIMER_EVENT> timer_queue;
 
-enum COMP_TYPE { OP_ACCEPT, OP_RECV, OP_SEND, OP_NPC_MOVE, OP_AI_HELLO };
+enum COMP_TYPE { OP_ACCEPT, OP_RECV, OP_SEND, OP_NPC_MOVE, OP_AI_HELLO, OP_AI_MOVE, OP_AI_BYE };
 class OVER_EXP {
 public:
 	WSAOVERLAPPED _over;
@@ -120,7 +120,9 @@ public:
 	}
 	void send_move_packet(int c_id);
 	void send_add_player_packet(int c_id);
-	void send_chat_packet(int c_id, const char* mess);
+	void send_chat_in(int p_id, const char* in);
+	void send_chat_out(int p_id, const char* out);
+	void send_npc_move(int p_id);
 	void send_remove_player_packet(int c_id)
 	{
 		_vl.lock();
@@ -213,14 +215,31 @@ void SESSION::send_add_player_packet(int c_id)
 	do_send(&add_packet);
 }
 
-void SESSION::send_chat_packet(int p_id, const char* mess)
+void do_npc_random_move(int npc_id);
+
+void SESSION::send_chat_in(int p_id, const char* in)
 {
-	SC_CHAT_PACKET packet;
+	SC_EVENT_PACKET packet;
 	packet.id = p_id;
 	packet.size = sizeof(packet);
-	packet.type = SC_CHAT;
-	strcpy_s(packet.mess, mess);
+	packet.type = SC_EVENT;
+	strcpy_s(packet.mess, in);
 	do_send(&packet);
+}
+
+void SESSION::send_chat_out(int p_id, const char* out)
+{
+	SC_EVENT_PACKET packet;
+	packet.id = p_id;
+	packet.size = sizeof(packet);
+	packet.type = SC_EVENT;
+	strcpy_s(packet.mess, out);
+	do_send(&packet);
+}
+
+void SESSION::send_npc_move(int p_id)
+{
+	do_npc_random_move(p_id);
 }
 
 int get_new_client_id()
@@ -233,10 +252,10 @@ int get_new_client_id()
 	return -1;
 }
 
-void WakeUpNPC(int npc_id, int waker)
+void WakeUpNPC(int npc_id, int waker, COMP_TYPE type)
 {
 	OVER_EXP* exover = new OVER_EXP;
-	exover->_comp_type = OP_AI_HELLO;
+	exover->_comp_type = type;
 	exover->_ai_target_obj = waker;
 	PostQueuedCompletionStatus(h_iocp, 1, npc_id, &exover->_over);
 
@@ -277,7 +296,7 @@ void process_packet(int c_id, char* packet)
 			if (false == can_see(c_id, pl._id))
 				continue;
 			if (is_pc(pl._id)) pl.send_add_player_packet(c_id);
-			else WakeUpNPC(pl._id, c_id);
+			else WakeUpNPC(pl._id, c_id, OP_AI_HELLO);
 			objects[c_id].send_add_player_packet(pl._id);
 		}
 		break;
@@ -328,7 +347,12 @@ void process_packet(int c_id, char* packet)
 					objects[pl].send_add_player_packet(c_id);
 				}
 			}
-			else WakeUpNPC(pl, c_id);
+			else
+			{
+				WakeUpNPC(pl, c_id, OP_AI_HELLO);
+				WakeUpNPC(pl, c_id, OP_AI_MOVE);
+				WakeUpNPC(pl, c_id, OP_AI_BYE);
+			}
 
 			if (old_vlist.count(pl) == 0)
 				objects[c_id].send_add_player_packet(pl);
@@ -521,6 +545,17 @@ void worker_thread(HANDLE h_iocp)
 		case OP_AI_HELLO: {
 			objects[key]._ll.lock();
 			auto L = objects[key]._L;
+			lua_getglobal(L, "chat_in");
+			lua_pushnumber(L, ex_over->_ai_target_obj);
+			lua_pcall(L, 1, 0, 0);
+			//lua_pop(L, 1);
+			objects[key]._ll.unlock();
+			delete ex_over;
+		}
+						break;
+		case OP_AI_MOVE: {
+			objects[key]._ll.lock();
+			auto L = objects[key]._L;
 			lua_getglobal(L, "event_player_move");
 			lua_pushnumber(L, ex_over->_ai_target_obj);
 			lua_pcall(L, 1, 0, 0);
@@ -529,6 +564,17 @@ void worker_thread(HANDLE h_iocp)
 			delete ex_over;
 		}
 						break;
+		case OP_AI_BYE: {
+			objects[key]._ll.lock();
+			auto L = objects[key]._L;
+			lua_getglobal(L, "chat_out");
+			lua_pushnumber(L, ex_over->_ai_target_obj);
+			lua_pcall(L, 1, 0, 0);
+			//lua_pop(L, 1);
+			objects[key]._ll.unlock();
+			delete ex_over;
+		}
+					   break;
 
 		}
 	}
@@ -554,15 +600,38 @@ int API_get_y(lua_State* L)
 	return 1;
 }
 
-int API_SendMessage(lua_State* L)
+int API_ChatIn(lua_State* L)
 {
 	int my_id = (int)lua_tointeger(L, -3);
 	int user_id = (int)lua_tointeger(L, -2);
-	char* mess = (char*)lua_tostring(L, -1);
+	char* in = (char*)lua_tostring(L, -1);
 
 	lua_pop(L, 4);
 
-	objects[user_id].send_chat_packet(my_id, mess);
+	objects[user_id].send_chat_in(my_id, in);
+	return 0;
+}
+
+int API_ChatOut(lua_State* L)
+{
+	int my_id = (int)lua_tointeger(L, -3);
+	int user_id = (int)lua_tointeger(L, -2);
+	char* out = (char*)lua_tostring(L, -1);
+
+	lua_pop(L, 4);
+
+	objects[user_id].send_chat_out(my_id, out);
+	return 0;
+}
+
+int API_MovePlayer(lua_State* L)
+{
+	int my_id = (int)lua_tointeger(L, -2);
+	int user_id = (int)lua_tointeger(L, -1);
+
+	lua_pop(L, 3);
+
+	objects[user_id].send_npc_move(my_id);
 	return 0;
 }
 
@@ -589,7 +658,9 @@ void InitializeNPC()
 		lua_pcall(L, 1, 0, 0);
 		// lua_pop(L, 1);// eliminate set_uid from stack after call
 
-		lua_register(L, "API_SendMessage", API_SendMessage);
+		lua_register(L, "API_ChatIn", API_ChatIn);
+		lua_register(L, "API_ChatOut", API_ChatOut);
+		lua_register(L, "API_MovePlayer", API_MovePlayer);
 		lua_register(L, "API_get_x", API_get_x);
 		lua_register(L, "API_get_y", API_get_y);
 	}

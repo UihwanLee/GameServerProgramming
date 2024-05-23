@@ -14,20 +14,20 @@
 #include <array>
 #include <memory>
 
-#include "..\..\Server\GamerServer_Server\protocol.h"
-
 using namespace std;
 using namespace chrono;
 
 extern HWND		hWnd;
 
 const static int MAX_TEST = 10000;
-constexpr int MAX_CLIENTS = MAX_USER * 2 + MAX_NPC;
+const static int MAX_CLIENTS = MAX_TEST * 2;
 const static int INVALID_ID = -1;
 const static int MAX_PACKET_SIZE = 255;
 const static int MAX_BUFF_SIZE = 255;
 
 #pragma comment (lib, "ws2_32.lib")
+
+#include "..\..\Server\GamerServer_Server\protocol.h"
 
 HANDLE g_hiocp;
 
@@ -148,6 +148,7 @@ void ProcessPacket(int ci, unsigned char packet[])
 					   break;
 	case SC_ADD_OBJECT: break;
 	case SC_REMOVE_OBJECT: break;
+	case SC_EVENT: break;
 	case SC_LOGIN_INFO:
 	{
 		g_clients[ci].connected = true;
@@ -253,7 +254,6 @@ void Worker_Thread()
 constexpr int DELAY_LIMIT = 100;
 constexpr int DELAY_LIMIT2 = 150;
 constexpr int ACCEPT_DELY = 50;
-char SERVER_ADDR[10];
 
 void Adjust_Number_Of_Client()
 {
@@ -295,7 +295,7 @@ void Adjust_Number_Of_Client()
 	ZeroMemory(&ServerAddr, sizeof(SOCKADDR_IN));
 	ServerAddr.sin_family = AF_INET;
 	ServerAddr.sin_port = htons(PORT_NUM);
-	ServerAddr.sin_addr.s_addr = inet_addr(SERVER_ADDR);
+	ServerAddr.sin_addr.s_addr = inet_addr("127.0.0.1");
 
 
 	int Result = WSAConnect(g_clients[num_connections].client_socket, (sockaddr*)&ServerAddr, sizeof(ServerAddr), NULL, NULL, NULL, NULL);
@@ -382,9 +382,6 @@ void InitializeNetwork()
 	for (int i = 0; i < 6; ++i)
 		worker_threads.push_back(new std::thread{ Worker_Thread });
 
-	std::cout << "서버 주소: ";
-	std::cin.getline(SERVER_ADDR, 10);
-
 	test_thread = thread{ Test_Thread };
 }
 
@@ -415,4 +412,3 @@ void GetPointCloud(int* size, float** points)
 	*size = index;
 	*points = point_cloud;
 }
-
