@@ -19,6 +19,9 @@ Release 모드에서 실행 주세요!
  - 클라이언트 전체 보드 13x13
  - VIEW_RANGE : 5 (11x11)
  - NPC: 200000 마리
+ - lua ai 처리
+   - chat
+   - move
 
 실습 기법
  - multi_iocp:			시야 처리 O / 타이머 multiThread 사용
