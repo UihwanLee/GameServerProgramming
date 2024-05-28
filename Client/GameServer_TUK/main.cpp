@@ -48,9 +48,19 @@ void ProcessPacket(char* ptr)
 	static bool first_time = true;
 	switch (ptr[1])
 	{
+	case SC_LOGIN_FAIL:
+	{
+		SC_LOGIN_FAIL_PACKET* packet = reinterpret_cast<SC_LOGIN_FAIL_PACKET*>(ptr);
+
+		std::cout << "[로그인 실패] 입력한 ID가 유효하지 않습니다" << std::endl;
+	}
+	break;
+
 	case SC_LOGIN_INFO:
 	{
 		SC_LOGIN_INFO_PACKET* packet = reinterpret_cast<SC_LOGIN_INFO_PACKET*>(ptr);
+
+		std::cout << "[로그인 성공] 로그인 하셨습니다." << std::endl;
 
 		m_ObjectManager->m_players[packet->id] = m_ObjectManager->creatPlayer(packet->id);
 		m_ObjectManager->setPlayerPosition(packet->id, packet->x, packet->y);
@@ -262,9 +272,29 @@ GLvoid initServer()
 		exit(-1);
 	}
 
+	char DB_ID[18];
+	int id;
+
+	std::cout << "[로그인]\n";
+	std::cout << "접속할 id를 입력해주세요: ";
+	std::cin.getline(DB_ID, 18);
+
+	try {
+		id = std::stoi(DB_ID);
+	}
+	catch (const std::invalid_argument& e) {
+		std::cerr << "[ERROR] id를 잘못 입력하였습니다.\n";
+		return;
+	}
+	catch (const std::out_of_range& e) {
+		std::cerr << "[ERROR] id를 잘못 입력하였습니다.\n";
+		return;
+	}
+
 	// 서버에 플레이어 로그인 요청
 	CS_LOGIN_PACKET p;
 	p.size = sizeof(p);
+	p.id = id;
 	p.type = CS_LOGIN;
 
 	string player_name{ "P" };

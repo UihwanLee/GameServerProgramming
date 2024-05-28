@@ -30,6 +30,7 @@ constexpr char SC_STAT_CHANGE = 9;
 struct CS_LOGIN_PACKET {
 	unsigned char size;
 	char	type;
+	short	id;
 	char	name[NAME_SIZE];
 };
 

@@ -10,6 +10,7 @@
 #include "protocol.h"
 
 #include "include/lua.hpp"
+#include "DB.h";
 
 #pragma comment(lib, "WS2_32.lib")
 #pragma comment(lib, "MSWSock.lib")
@@ -118,6 +119,13 @@ public:
 		p.cy = cy;
 		do_send(&p);
 	}
+	void send_login_fail_packet()
+	{
+		SC_LOGIN_FAIL_PACKET p;
+		p.size = sizeof(SC_LOGIN_FAIL_PACKET);
+		p.type = SC_LOGIN_FAIL;
+		do_send(&p);
+	}
 	void send_move_packet(int c_id);
 	void send_add_player_packet(int c_id);
 	void send_chat_in(int p_id, const char* in);
@@ -143,6 +151,8 @@ public:
 
 HANDLE h_iocp;
 array<SESSION, MAX_USER + MAX_NPC> objects;
+DB* db;
+
 
 // NPC 구현 첫번째 방법
 //  NPC클래스를 별도 제작, NPC컨테이너를 따로 생성한다.
@@ -272,6 +282,15 @@ void process_packet(int c_id, char* packet)
 	switch (packet[1]) {
 	case CS_LOGIN: {
 		CS_LOGIN_PACKET* p = reinterpret_cast<CS_LOGIN_PACKET*>(packet);
+
+		// LOGIN 시 사용자가 입력한 id가 데이터베이스에 있는지 체크한다.
+		if (false == (db->check_id(p->id)))
+		{
+			// DB에 사용자 정보가 없으면 login fail packet 전송
+			objects[c_id].send_login_fail_packet();
+			return;
+		}
+
 		strcpy_s(objects[c_id]._name, p->name);
 		{
 			lock_guard<mutex> ll{ objects[c_id]._s_lock };
@@ -706,6 +725,8 @@ int main()
 	listen(g_s_socket, SOMAXCONN);
 	SOCKADDR_IN cl_addr;
 	int addr_size = sizeof(cl_addr);
+
+	db = new DB();
 
 	InitializeNPC();
 
