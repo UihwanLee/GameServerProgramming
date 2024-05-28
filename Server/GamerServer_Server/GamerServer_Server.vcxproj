@@ -128,8 +128,8 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="lua_iocp.cpp" />
-    <ClCompile Include="multi_iocp.cpp">
+    <ClCompile Include="dbtest.cpp" />
+    <ClCompile Include="lua_iocp.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </ClCompile>
   </ItemGroup>

@@ -15,10 +15,10 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="multi_iocp.cpp">
+    <ClCompile Include="lua_iocp.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
-    <ClCompile Include="lua_iocp.cpp">
+    <ClCompile Include="dbtest.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
   </ItemGroup>
