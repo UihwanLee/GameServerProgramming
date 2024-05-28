@@ -8,9 +8,10 @@
 #include <unordered_set>
 #include <concurrent_priority_queue.h>
 #include "protocol.h"
+#include "DB.h"
 
 #include "include/lua.hpp"
-#include "DB.h";
+
 
 #pragma comment(lib, "WS2_32.lib")
 #pragma comment(lib, "MSWSock.lib")
@@ -33,7 +34,7 @@ struct TIMER_EVENT {
 };
 concurrency::concurrent_priority_queue<TIMER_EVENT> timer_queue;
 
-enum COMP_TYPE { OP_ACCEPT, OP_RECV, OP_SEND, OP_NPC_MOVE, OP_AI_HELLO, OP_AI_MOVE, OP_AI_BYE };
+enum COMP_TYPE { OP_ACCEPT, OP_RECV, OP_SEND, OP_NPC_MOVE, OP_AI_MOVE };
 class OVER_EXP {
 public:
 	WSAOVERLAPPED _over;
@@ -68,12 +69,9 @@ public:
 	atomic_bool	_is_active;		// 주위에 플레이어가 있는가?
 	int _id;
 	SOCKET _socket;
-	float	x, y;
-	float	cx, cy;
+	short	x, y;
 	char	_name[NAME_SIZE];
 	int		_prev_remain;
-	int		sector_x;
-	int		sector_y;
 	unordered_set <int> _view_list;
 	mutex	_vl;
 	int		last_move_time;
@@ -107,6 +105,13 @@ public:
 		OVER_EXP* sdata = new OVER_EXP{ reinterpret_cast<char*>(packet) };
 		WSASend(_socket, &sdata->_wsabuf, 1, 0, 0, &sdata->_over, 0);
 	}
+	void send_login_fail_packet()
+	{
+		SC_LOGIN_FAIL_PACKET p;
+		p.size = sizeof(SC_LOGIN_INFO_PACKET);
+		p.type = SC_LOGIN_FAIL;
+		do_send(&p);
+	}
 	void send_login_info_packet()
 	{
 		SC_LOGIN_INFO_PACKET p;
@@ -115,22 +120,11 @@ public:
 		p.type = SC_LOGIN_INFO;
 		p.x = x;
 		p.y = y;
-		p.cx = cx;
-		p.cy = cy;
-		do_send(&p);
-	}
-	void send_login_fail_packet()
-	{
-		SC_LOGIN_FAIL_PACKET p;
-		p.size = sizeof(SC_LOGIN_FAIL_PACKET);
-		p.type = SC_LOGIN_FAIL;
 		do_send(&p);
 	}
 	void send_move_packet(int c_id);
 	void send_add_player_packet(int c_id);
-	void send_chat_in(int p_id, const char* in);
-	void send_chat_out(int p_id, const char* out);
-	void send_npc_move(int p_id);
+	void send_chat_packet(int c_id, const char* mess);
 	void send_remove_player_packet(int c_id)
 	{
 		_vl.lock();
@@ -152,7 +146,6 @@ public:
 HANDLE h_iocp;
 array<SESSION, MAX_USER + MAX_NPC> objects;
 DB* db;
-
 
 // NPC 구현 첫번째 방법
 //  NPC클래스를 별도 제작, NPC컨테이너를 따로 생성한다.
@@ -189,11 +182,10 @@ bool is_npc(int object_id)
 	return !is_pc(object_id);
 }
 
-bool can_see(int a, int b)
+bool can_see(int from, int to)
 {
-	int dist = (objects[a].x - objects[b].x) * (objects[a].x - objects[b].x) +
-		(objects[a].y - objects[b].y) * (objects[a].y - objects[b].y);
-	return dist <= VIEW_RANGE * VIEW_RANGE;
+	if (abs(objects[from].x - objects[to].x) > VIEW_RANGE) return false;
+	return abs(objects[from].y - objects[to].y) <= VIEW_RANGE;
 }
 
 void SESSION::send_move_packet(int c_id)
@@ -204,8 +196,6 @@ void SESSION::send_move_packet(int c_id)
 	p.type = SC_MOVE_OBJECT;
 	p.x = objects[c_id].x;
 	p.y = objects[c_id].y;
-	p.cx = objects[c_id].cx;
-	p.cy = objects[c_id].cy;
 	p.move_time = objects[c_id].last_move_time;
 	do_send(&p);
 }
@@ -225,31 +215,14 @@ void SESSION::send_add_player_packet(int c_id)
 	do_send(&add_packet);
 }
 
-void do_npc_random_move(int npc_id);
-
-void SESSION::send_chat_in(int p_id, const char* in)
+void SESSION::send_chat_packet(int p_id, const char* mess)
 {
-	SC_EVENT_PACKET packet;
+	SC_CHAT_PACKET packet;
 	packet.id = p_id;
 	packet.size = sizeof(packet);
-	packet.type = SC_EVENT;
-	strcpy_s(packet.mess, in);
+	packet.type = SC_CHAT;
+	strcpy_s(packet.mess, mess);
 	do_send(&packet);
-}
-
-void SESSION::send_chat_out(int p_id, const char* out)
-{
-	SC_EVENT_PACKET packet;
-	packet.id = p_id;
-	packet.size = sizeof(packet);
-	packet.type = SC_EVENT;
-	strcpy_s(packet.mess, out);
-	do_send(&packet);
-}
-
-void SESSION::send_npc_move(int p_id)
-{
-	do_npc_random_move(p_id);
 }
 
 int get_new_client_id()
@@ -262,10 +235,10 @@ int get_new_client_id()
 	return -1;
 }
 
-void WakeUpNPC(int npc_id, int waker, COMP_TYPE type)
+void WakeUpNPC(int npc_id, int waker)
 {
 	OVER_EXP* exover = new OVER_EXP;
-	exover->_comp_type = type;
+	exover->_comp_type = OP_AI_MOVE;
 	exover->_ai_target_obj = waker;
 	PostQueuedCompletionStatus(h_iocp, 1, npc_id, &exover->_over);
 
@@ -283,27 +256,19 @@ void process_packet(int c_id, char* packet)
 	case CS_LOGIN: {
 		CS_LOGIN_PACKET* p = reinterpret_cast<CS_LOGIN_PACKET*>(packet);
 
-		// LOGIN 시 사용자가 입력한 id가 데이터베이스에 있는지 체크한다.
+		// DB에 로그인 정보가 있는지 확인
 		if (false == (db->check_id(p->id)))
 		{
-			// DB에 사용자 정보가 없으면 login fail packet 전송
 			objects[c_id].send_login_fail_packet();
 			return;
 		}
 
-		strcpy_s(objects[c_id]._name, p->name);
+		strcpy_s(objects[c_id]._name, db->getName());
 		{
 			lock_guard<mutex> ll{ objects[c_id]._s_lock };
-			int sector_x = 10;
-			int sector_y = 10;
-			//get_best_sector(&sector_x, &sector_y);
-			int pos_x = rand() % W_WIDTH;
-			int pos_y = rand() & W_HEIGHT;
-			objects[c_id].x = pos_x;
-			objects[c_id].y = pos_y;
-			objects[c_id].y = objects[c_id].y * -1.0f;
-			objects[c_id].cx = objects[c_id].x * -1.0f;
-			objects[c_id].cy = objects[c_id].y * -1.0f;
+			objects[c_id].x = db->getPosX();
+			objects[c_id].y = db->getPosY();
+			objects[c_id]._state = ST_INGAME;
 		}
 		objects[c_id].send_login_info_packet();
 		for (auto& pl : objects) {
@@ -315,7 +280,7 @@ void process_packet(int c_id, char* packet)
 			if (false == can_see(c_id, pl._id))
 				continue;
 			if (is_pc(pl._id)) pl.send_add_player_packet(c_id);
-			else WakeUpNPC(pl._id, c_id, OP_AI_HELLO);
+			else WakeUpNPC(pl._id, c_id);
 			objects[c_id].send_add_player_packet(pl._id);
 		}
 		break;
@@ -323,22 +288,16 @@ void process_packet(int c_id, char* packet)
 	case CS_MOVE: {
 		CS_MOVE_PACKET* p = reinterpret_cast<CS_MOVE_PACKET*>(packet);
 		objects[c_id].last_move_time = p->move_time;
-		float x = objects[c_id].x;
-		float y = objects[c_id].y;
-		float cx = objects[c_id].cx;
-		float cy = objects[c_id].cy;
-		cx = 0.0f;
-		cy = 0.0f;
+		short x = objects[c_id].x;
+		short y = objects[c_id].y;
 		switch (p->direction) {
-		case 0: { if (y < 0) { y += 1.0f; cy = -1.0f; } break; }
-		case 1: { if (y > -W_HEIGHT + 1) { y -= 1.0f; cy = 1.0f; } break; }
-		case 2: { if (x > 0) { x -= 1.0f; cx = 1.0f; } break; }
-		case 3: { if (x < W_WIDTH - 1) { x += 1.0f; cx = -1.0f; } break; }
+		case 0: if (y > 0) y--; break;
+		case 1: if (y < W_HEIGHT - 1) y++; break;
+		case 2: if (x > 0) x--; break;
+		case 3: if (x < W_WIDTH - 1) x++; break;
 		}
 		objects[c_id].x = x;
 		objects[c_id].y = y;
-		objects[c_id].cx = cx;
-		objects[c_id].cy = cy;
 
 		unordered_set<int> near_list;
 		objects[c_id]._vl.lock();
@@ -366,12 +325,7 @@ void process_packet(int c_id, char* packet)
 					objects[pl].send_add_player_packet(c_id);
 				}
 			}
-			else
-			{
-				WakeUpNPC(pl, c_id, OP_AI_HELLO);
-				WakeUpNPC(pl, c_id, OP_AI_MOVE);
-				WakeUpNPC(pl, c_id, OP_AI_BYE);
-			}
+			else WakeUpNPC(pl, c_id);
 
 			if (old_vlist.count(pl) == 0)
 				objects[c_id].send_add_player_packet(pl);
@@ -422,23 +376,21 @@ void do_npc_random_move(int npc_id)
 
 	int x = npc.x;
 	int y = npc.y;
-	switch (rand() % 4)
-	{
-	case 0: { if (y < 0) { y += 1.0f; } break; }
-	case 1: { if (y > -W_HEIGHT + 1) { y -= 1.0f; } break; }
-	case 2: { if (x > 0) { x -= 1.0f; } break; }
-	case 3: { if (x < W_WIDTH - 1) { x += 1.0f; } break; }
+	switch (rand() % 4) {
+	case 0: if (x < (W_WIDTH - 1)) x++; break;
+	case 1: if (x > 0) x--; break;
+	case 2: if (y < (W_HEIGHT - 1)) y++; break;
+	case 3:if (y > 0) y--; break;
 	}
 	npc.x = x;
 	npc.y = y;
 
 	unordered_set<int> new_vl;
 	for (auto& obj : objects) {
-		//if (ST_INGAME != obj._state) continue;
+		if (ST_INGAME != obj._state) continue;
 		if (true == is_npc(obj._id)) continue;
-		if (true == can_see(npc._id, obj._id)) {
+		if (true == can_see(npc._id, obj._id))
 			new_vl.insert(obj._id);
-		}
 	}
 
 	for (auto pl : new_vl) {
@@ -498,10 +450,8 @@ void worker_thread(HANDLE h_iocp)
 					lock_guard<mutex> ll(objects[client_id]._s_lock);
 					objects[client_id]._state = ST_ALLOC;
 				}
-				objects[client_id].x = 0.0f;
-				objects[client_id].y = 0.0f;
-				objects[client_id].cx = 0.0f;
-				objects[client_id].cy = 0.0f;
+				objects[client_id].x = 0;
+				objects[client_id].y = 0;
 				objects[client_id]._id = client_id;
 				objects[client_id]._name[0] = 0;
 				objects[client_id]._prev_remain = 0;
@@ -544,7 +494,7 @@ void worker_thread(HANDLE h_iocp)
 		case OP_NPC_MOVE: {
 			bool keep_alive = false;
 			for (int j = 0; j < MAX_USER; ++j) {
-				//if (objects[j]._state != ST_INGAME) continue;
+				if (objects[j]._state != ST_INGAME) continue;
 				if (can_see(static_cast<int>(key), j)) {
 					keep_alive = true;
 					break;
@@ -561,32 +511,10 @@ void worker_thread(HANDLE h_iocp)
 			delete ex_over;
 		}
 						break;
-		case OP_AI_HELLO: {
-			objects[key]._ll.lock();
-			auto L = objects[key]._L;
-			lua_getglobal(L, "chat_in");
-			lua_pushnumber(L, ex_over->_ai_target_obj);
-			lua_pcall(L, 1, 0, 0);
-			//lua_pop(L, 1);
-			objects[key]._ll.unlock();
-			delete ex_over;
-		}
-						break;
 		case OP_AI_MOVE: {
 			objects[key]._ll.lock();
 			auto L = objects[key]._L;
 			lua_getglobal(L, "event_player_move");
-			lua_pushnumber(L, ex_over->_ai_target_obj);
-			lua_pcall(L, 1, 0, 0);
-			//lua_pop(L, 1);
-			objects[key]._ll.unlock();
-			delete ex_over;
-		}
-						break;
-		case OP_AI_BYE: {
-			objects[key]._ll.lock();
-			auto L = objects[key]._L;
-			lua_getglobal(L, "chat_out");
 			lua_pushnumber(L, ex_over->_ai_target_obj);
 			lua_pcall(L, 1, 0, 0);
 			//lua_pop(L, 1);
@@ -619,38 +547,15 @@ int API_get_y(lua_State* L)
 	return 1;
 }
 
-int API_ChatIn(lua_State* L)
+int API_SendMessage(lua_State* L)
 {
 	int my_id = (int)lua_tointeger(L, -3);
 	int user_id = (int)lua_tointeger(L, -2);
-	char* in = (char*)lua_tostring(L, -1);
+	char* mess = (char*)lua_tostring(L, -1);
 
 	lua_pop(L, 4);
 
-	objects[user_id].send_chat_in(my_id, in);
-	return 0;
-}
-
-int API_ChatOut(lua_State* L)
-{
-	int my_id = (int)lua_tointeger(L, -3);
-	int user_id = (int)lua_tointeger(L, -2);
-	char* out = (char*)lua_tostring(L, -1);
-
-	lua_pop(L, 4);
-
-	objects[user_id].send_chat_out(my_id, out);
-	return 0;
-}
-
-int API_MovePlayer(lua_State* L)
-{
-	int my_id = (int)lua_tointeger(L, -2);
-	int user_id = (int)lua_tointeger(L, -1);
-
-	lua_pop(L, 3);
-
-	objects[user_id].send_npc_move(my_id);
+	objects[user_id].send_chat_packet(my_id, mess);
 	return 0;
 }
 
@@ -658,11 +563,8 @@ void InitializeNPC()
 {
 	cout << "NPC intialize begin.\n";
 	for (int i = MAX_USER; i < MAX_USER + MAX_NPC; ++i) {
-		int pos_x = rand() % W_WIDTH;
-		int pos_y = rand() & W_HEIGHT;
-		objects[i].x = pos_x;
-		objects[i].y = pos_y;
-		objects[i].y = objects[i].y * -1.0f;
+		objects[i].x = rand() % W_WIDTH;
+		objects[i].y = rand() % W_HEIGHT;
 		objects[i]._id = i;
 		sprintf_s(objects[i]._name, "NPC%d", i);
 		objects[i]._state = ST_INGAME;
@@ -677,9 +579,7 @@ void InitializeNPC()
 		lua_pcall(L, 1, 0, 0);
 		// lua_pop(L, 1);// eliminate set_uid from stack after call
 
-		lua_register(L, "API_ChatIn", API_ChatIn);
-		lua_register(L, "API_ChatOut", API_ChatOut);
-		lua_register(L, "API_MovePlayer", API_MovePlayer);
+		lua_register(L, "API_SendMessage", API_SendMessage);
 		lua_register(L, "API_get_x", API_get_x);
 		lua_register(L, "API_get_y", API_get_y);
 	}

@@ -1,4 +1,5 @@
 #include "DB.h"
+#include <iostream>
 
 DB::DB()
 {
@@ -63,7 +64,7 @@ bool DB::check_id(int id)
                     retcode = SQLAllocHandle(SQL_HANDLE_STMT, hdbc, &hstmt);
 
                     swprintf(query, sizeof(query) / sizeof(wchar_t), L"EXEC check_id %d", id);
-                    retcode = SQLExecDirect(hstmt, (SQLWCHAR*)query, SQL_NTS);
+                    retcode = SQLExecDirect(hstmt, query, SQL_NTS);
                     if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
 
                         // Bind columns 1, 2, and 3  
@@ -73,6 +74,22 @@ bool DB::check_id(int id)
                         retcode = SQLBindCol(hstmt, 4, SQL_C_SHORT, &dPosX, 10, &cbPosX);
                         retcode = SQLBindCol(hstmt, 5, SQL_C_SHORT, &dPosY, 10, &cbPosY);
                         retcode = SQLBindCol(hstmt, 6, SQL_C_SHORT, &dHp, 10, &cbHp);
+
+                        // 변환을 위해 로케일 설정
+                        std::setlocale(LC_ALL, "");
+
+                        // SQLWCHAR (UTF-16) -> char (UTF-8) 변환
+                        std::size_t convertedChars = 0;
+                        // SQLWCHAR (UTF-16) -> char (UTF-8) 변환
+                        errno_t err = wcstombs_s(&convertedChars, name, sizeof(name), szName, sizeof(name) - 1);
+
+                        if (err != 0) {
+                            std::cerr << "변환에 실패했습니다.\n";
+                            return 1;
+                        }
+
+                        posX = static_cast<short>(dPosX);
+                        posY = static_cast<short>(dPosY);
 
                         // Fetch and print each row of data. On an error, display a message and exit.  
                         for (int i = 0; ; i++) {
@@ -90,7 +107,10 @@ bool DB::check_id(int id)
                                 return true;
                             }
                             else
+                            {
                                 return false;
+                            }
+                                
                         }
                     }
                     else {
@@ -117,6 +137,6 @@ bool DB::check_id(int id)
     return false;
 }
 
-void DB::update_pos(int id, float x, float y)
+void DB::update_pos(int id, short x, short y)
 {
 }
