@@ -150,7 +150,8 @@ void ProcessPacket(char* ptr)
 	{
 		std::cout << "[로그인 성공] 로그인 하였습니다.\n";
 		SC_LOGIN_INFO_PACKET* packet = reinterpret_cast<SC_LOGIN_INFO_PACKET*>(ptr);
-		//avatar.set_name(packet->name);
+		std::cout << "name: " << packet->name << std::endl;
+		avatar.set_name(packet->name);
 		g_myid = packet->id;
 		avatar.id = g_myid;
 		avatar.move(packet->x, packet->y);

@@ -6,6 +6,10 @@
 #define UNICODE  
 #include <sqlext.h>  
 
+#include <iostream>
+#include <codecvt>
+#include <string>
+
 #define NAME_LEN 20
 #define PHONE_LEN 60
 
@@ -27,7 +31,7 @@ private:
 
     short posX;
     short posY;
-    char name[20];
+    char* name;
 
 public:
     DB();

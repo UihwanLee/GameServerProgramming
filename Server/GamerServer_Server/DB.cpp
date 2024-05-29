@@ -1,5 +1,4 @@
 #include "DB.h"
-#include <iostream>
 
 DB::DB()
 {
@@ -42,6 +41,23 @@ void DB::show_error()
     printf("error\n");
 }
 
+//wchar_t 에서 char 로의 형변환 함수
+
+char* ConvertWCtoC(wchar_t* str)
+{
+    //반환할 char* 변수 선언
+    char* pStr;
+
+    //입력받은 wchar_t 변수의 길이를 구함
+    int strSize = WideCharToMultiByte(CP_ACP, 0, str, -1, NULL, 0, NULL, NULL);
+    //char* 메모리 할당
+    pStr = new char[strSize];
+
+    //형 변환 
+    WideCharToMultiByte(CP_ACP, 0, str, -1, pStr, strSize, 0, 0);
+    return pStr;
+}
+
 bool DB::check_id(int id)
 {
     // Set the ODBC version environment attribute  
@@ -75,22 +91,6 @@ bool DB::check_id(int id)
                         retcode = SQLBindCol(hstmt, 5, SQL_C_SHORT, &dPosY, 10, &cbPosY);
                         retcode = SQLBindCol(hstmt, 6, SQL_C_SHORT, &dHp, 10, &cbHp);
 
-                        // 변환을 위해 로케일 설정
-                        std::setlocale(LC_ALL, "");
-
-                        // SQLWCHAR (UTF-16) -> char (UTF-8) 변환
-                        std::size_t convertedChars = 0;
-                        // SQLWCHAR (UTF-16) -> char (UTF-8) 변환
-                        errno_t err = wcstombs_s(&convertedChars, name, sizeof(name), szName, sizeof(name) - 1);
-
-                        if (err != 0) {
-                            std::cerr << "변환에 실패했습니다.\n";
-                            return 1;
-                        }
-
-                        posX = static_cast<short>(dPosX);
-                        posY = static_cast<short>(dPosY);
-
                         // Fetch and print each row of data. On an error, display a message and exit.  
                         for (int i = 0; ; i++) {
                             retcode = SQLFetch(hstmt);
@@ -104,6 +104,12 @@ bool DB::check_id(int id)
                                 //but variadic argument 2 has type 'SQLWCHAR *'
                                 //wprintf(L"%d: %S %S %S\n", i + 1, sCustID, szName, szPhone);  
                                 wprintf(L"%d: %6d %20s %3d %3d %3d %3d\n", i + 1, dId, szName, dLevel, dPosX, dPosY, dHp);
+
+                                name = ConvertWCtoC(szName);
+
+                                posX = static_cast<short>(dPosX);
+                                posY = static_cast<short>(dPosY);
+
                                 return true;
                             }
                             else

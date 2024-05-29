@@ -117,6 +117,7 @@ public:
 		SC_LOGIN_INFO_PACKET p;
 		p.id = _id;
 		p.size = sizeof(SC_LOGIN_INFO_PACKET);
+		strcpy_s(p.name, sizeof(p.name), _name);
 		p.type = SC_LOGIN_INFO;
 		p.x = x;
 		p.y = y;
@@ -204,7 +205,7 @@ void SESSION::send_add_player_packet(int c_id)
 {
 	SC_ADD_OBJECT_PACKET add_packet;
 	add_packet.id = c_id;
-	strcpy_s(add_packet.name, objects[c_id]._name);
+	strcpy_s(add_packet.name, sizeof(add_packet.name), objects[c_id]._name);
 	add_packet.size = sizeof(add_packet);
 	add_packet.type = SC_ADD_OBJECT;
 	add_packet.x = objects[c_id].x;
@@ -263,7 +264,7 @@ void process_packet(int c_id, char* packet)
 			return;
 		}
 
-		strcpy_s(objects[c_id]._name, db->getName());
+		errno_t err = strcpy_s(objects[c_id]._name, sizeof(objects[c_id]._name), db->getName());
 		{
 			lock_guard<mutex> ll{ objects[c_id]._s_lock };
 			objects[c_id].x = db->getPosX();
