@@ -68,6 +68,7 @@ public:
 	S_STATE _state;
 	atomic_bool	_is_active;		// 주위에 플레이어가 있는가?
 	int _id;
+	int	_dbId;
 	SOCKET _socket;
 	short	x, y;
 	char	_name[NAME_SIZE];
@@ -264,6 +265,8 @@ void process_packet(int c_id, char* packet)
 			return;
 		}
 
+		objects[c_id]._dbId = p->id;
+
 		errno_t err = strcpy_s(objects[c_id]._name, sizeof(objects[c_id]._name), db->getName());
 		{
 			lock_guard<mutex> ll{ objects[c_id]._s_lock };
@@ -311,6 +314,7 @@ void process_packet(int c_id, char* packet)
 				near_list.insert(cl._id);
 		}
 
+		db->update_pos(objects[c_id]._dbId, x, y);
 		objects[c_id].send_move_packet(c_id);
 
 		for (auto& pl : near_list) {
