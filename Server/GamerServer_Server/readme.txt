@@ -23,6 +23,11 @@ Release 모드에서 실행 주세요!
    - chat
  - Microsoft SQL Server DB
 
+ [접속 가능한 아이디]
+ 1. 1
+ 2. 2
+ 3. 3
+
 실습 기법
  - multi_iocp:			시야 처리 O / 타이머 multiThread 사용
 
