@@ -113,15 +113,15 @@ void client_initialize()
 {
 	board = new sf::Texture;
 	pieces = new sf::Texture;
-	board->loadFromFile("chessmap.bmp");
-	pieces->loadFromFile("chess2.png");
+	board->loadFromFile("fieldmap.bmp");
+	pieces->loadFromFile("character.png");
 	if (false == g_font.loadFromFile("cour.ttf")) {
 		cout << "Font Loading Error!\n";
 		exit(-1);
 	}
 	white_tile = OBJECT{ *board, 5, 5, TILE_WIDTH, TILE_WIDTH };
 	black_tile = OBJECT{ *board, 69, 5, TILE_WIDTH, TILE_WIDTH };
-	avatar = OBJECT{ *pieces, 128, 0, 64, 64 };
+	avatar = OBJECT{ *pieces, 0, 0, 64, 64 };
 	avatar.move(4, 4);
 }
 
