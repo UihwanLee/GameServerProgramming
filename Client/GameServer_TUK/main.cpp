@@ -313,8 +313,8 @@ int main()
 {
 	wcout.imbue(locale("korean"));
 	char SERVER_ADDR[10] = "127.0.0.1";
-	//std::cout << "辑滚 林家: ";
-	//std::cin.getline(SERVER_ADDR, 10);
+	std::cout << "辑滚 林家: ";
+	std::cin.getline(SERVER_ADDR, 10);
 
 	sf::Socket::Status status = s_socket.connect(SERVER_ADDR, PORT_NUM);
 	s_socket.setBlocking(false);
