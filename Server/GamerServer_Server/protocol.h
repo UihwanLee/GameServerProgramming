@@ -1,7 +1,7 @@
 constexpr int PORT_NUM = 4000;
 constexpr int BUF_SIZE = 200;
 constexpr int NAME_SIZE = 20;
-constexpr int CHAT_SIZE = 100;
+constexpr int CHAT_SIZE = 300;
 
 constexpr int MAX_USER = 10000;
 constexpr int MAX_NPC = 200000;
@@ -61,6 +61,7 @@ struct SC_LOGIN_INFO_PACKET {
 	unsigned char size;
 	char	type;
 	int		id;
+	int		visual;				// 종족, 성별등을 구분할 때 사용
 	char	name[NAME_SIZE];
 	int		hp;
 	int		max_hp;
