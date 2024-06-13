@@ -72,6 +72,8 @@ public:
 	SOCKET _socket;
 	short	x, y;
 	char	_name[NAME_SIZE];
+	int hp;
+	int level;
 	int		_prev_remain;
 	unordered_set <int> _view_list;
 	mutex	_vl;
@@ -120,6 +122,8 @@ public:
 		p.size = sizeof(SC_LOGIN_INFO_PACKET);
 		strcpy_s(p.name, sizeof(p.name), _name);
 		p.type = SC_LOGIN_INFO;
+		p.hp = hp;
+		p.level = level;
 		p.x = x;
 		p.y = y;
 		do_send(&p);
@@ -270,6 +274,8 @@ void process_packet(int c_id, char* packet)
 		errno_t err = strcpy_s(objects[c_id]._name, sizeof(objects[c_id]._name), db->getName());
 		{
 			lock_guard<mutex> ll{ objects[c_id]._s_lock };
+			objects[c_id].hp = db->getHP();
+			objects[c_id].level = db->getLevel();
 			objects[c_id].x = db->getPosX();
 			objects[c_id].y = db->getPosY();
 			objects[c_id]._state = ST_INGAME;

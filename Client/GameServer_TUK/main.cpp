@@ -36,6 +36,8 @@ public:
 	int id;
 	int m_x, m_y;
 	char name[NAME_SIZE];
+	int hp;
+	int level;
 	OBJECT(sf::Texture& t, int x, int y, int x2, int y2) {
 		m_showing = false;
 		m_sprite.setTexture(t);
@@ -154,6 +156,8 @@ void ProcessPacket(char* ptr)
 		avatar.set_name(packet->name);
 		g_myid = packet->id;
 		avatar.id = g_myid;
+		avatar.hp = packet->hp;
+		avatar.level = packet->level;
 		avatar.move(packet->x, packet->y);
 		g_left_x = packet->x - SCREEN_WIDTH / 2;
 		g_top_y = packet->y - SCREEN_HEIGHT / 2;
@@ -296,10 +300,23 @@ void client_main()
 	for (auto& pl : players) pl.second.draw();
 	sf::Text text;
 	text.setFont(g_font);
+	text.setFillColor(sf::Color(0, 0, 0));
 	char buf[100];
-	sprintf_s(buf, "(%d, %d)", avatar.m_x, avatar.m_y);
+
+	sprintf_s(buf, "player HP: %d", avatar.hp);
 	text.setString(buf);
 	g_window->draw(text);
+
+	sprintf_s(buf, "player Level: %d", avatar.level);
+	text.setString(buf);
+	text.setPosition(0.0f, 25.0f);
+	g_window->draw(text);
+
+	sprintf_s(buf, "player pos: (%d, %d)", avatar.m_x, avatar.m_y);
+	text.setString(buf);
+	text.setPosition(0.0f, 50.0f);
+	g_window->draw(text);
+
 }
 
 void send_packet(void* packet)

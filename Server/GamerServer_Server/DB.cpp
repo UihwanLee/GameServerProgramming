@@ -110,6 +110,9 @@ bool DB::check_id(int id)
 
                                 name = ConvertWCtoC(szName);
 
+                                hp = static_cast<int>(dHp);
+                                level = static_cast<int>(dLevel);
+
                                 posX = static_cast<short>(dPosX);
                                 posY = static_cast<short>(dPosY);
 

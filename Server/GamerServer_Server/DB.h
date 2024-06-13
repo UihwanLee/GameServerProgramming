@@ -32,6 +32,8 @@ private:
     short posX;
     short posY;
     char* name;
+    int   hp;
+    int   level;
 
 public:
     DB();
@@ -46,5 +48,7 @@ public:
     char* getName() { return name; }
     short getPosX() { return posX; }
     short getPosY() { return posY; }
+    int   getHP() { return hp; }
+    int   getLevel() { return level; }
 };
 
