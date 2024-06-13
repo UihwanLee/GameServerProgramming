@@ -74,6 +74,7 @@ public:
 	char	_name[NAME_SIZE];
 	int hp;
 	int level;
+	int atk;
 	int		_prev_remain;
 	unordered_set <int> _view_list;
 	mutex	_vl;
@@ -87,6 +88,8 @@ public:
 		_socket = 0;
 		x = y = 0;
 		_name[0] = 0;
+		hp = 100;
+		atk = 10;
 		_state = ST_FREE;
 		_prev_remain = 0;
 	}
@@ -147,6 +150,7 @@ public:
 		p.type = SC_REMOVE_OBJECT;
 		do_send(&p);
 	}
+	void send_attack_packet(int c_id, int npc);
 };
 
 HANDLE h_iocp;
@@ -231,6 +235,17 @@ void SESSION::send_chat_packet(int p_id, const char* mess)
 	do_send(&packet);
 }
 
+void SESSION::send_attack_packet(int p_id, int npc)
+{
+	SC_ATTACK_OBJECT_PACKET packet;
+	packet.size = sizeof(packet);
+	packet.type = SC_ATTACK;
+	packet.id = p_id;
+	packet.npc = npc;
+	packet.atk = atk;
+	do_send(&packet);
+}
+
 int get_new_client_id()
 {
 	for (int i = 0; i < MAX_USER; ++i) {
@@ -254,6 +269,12 @@ void WakeUpNPC(int npc_id, int waker)
 		return;
 	TIMER_EVENT ev{ npc_id, chrono::system_clock::now(), EV_RANDOM_MOVE, 0 };
 	timer_queue.push(ev);
+}
+
+bool can_attack(int pc, int npc)
+{
+	if (abs(objects[pc].x - objects[npc].x) > 1) return false;
+	return abs(objects[pc].y - objects[npc].y) <= 1;
 }
 
 void process_packet(int c_id, char* packet)
@@ -350,6 +371,32 @@ void process_packet(int c_id, char* packet)
 			}
 	}
 				break;
+	case CS_ATTACK: {
+		CS_ATTACK_PACKET* p = reinterpret_cast<CS_ATTACK_PACKET*>(packet);
+
+		std::cout << "npc 공격1" << std::endl;
+
+		// 8방향에 몬스터가 있는지 체크
+		for (auto& cl : objects) {
+			if (cl._state != ST_INGAME) continue;
+			if (is_npc(cl._id)) {
+				if (can_attack(c_id, cl._id))
+				{
+					// 공격으로 npc가 죽었는지 체크
+					if (cl.hp - objects[c_id].atk <= 0)
+					{
+						cl._state = ST_FREE;
+						objects[c_id].send_remove_player_packet(cl._id);
+					}
+					else
+					{
+						objects[c_id].send_attack_packet(c_id, cl._id);
+					}
+				}
+			}
+		}
+	}
+				  break;
 	}
 }
 

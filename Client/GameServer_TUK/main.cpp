@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <Windows.h>
 #include <chrono>
+#include <random>
 using namespace std;
 
 #include "..\..\Server\GamerServer_Server\protocol.h"
@@ -12,6 +13,14 @@ sf::TcpSocket s_socket;
 
 constexpr auto SCREEN_WIDTH = 16;
 constexpr auto SCREEN_HEIGHT = 16;
+
+constexpr auto TOTAL_MAP_WIDTH = 2000;
+constexpr auto TOTAL_MAP_HEIGHT = 2000;
+
+constexpr auto TILE_BORDER = 3;
+
+int CENTRAL_TILE_SPACING_WIDTH = 5;
+int CENTRAL_TILE_SPACING_HEIGHT = 5;
 
 constexpr auto TILE_WIDTH = 65;
 constexpr auto WINDOW_WIDTH = SCREEN_WIDTH * TILE_WIDTH;   // size of window
@@ -31,13 +40,16 @@ private:
 
 	sf::Text m_name;
 	sf::Text m_chat;
+	sf::Text t_hp;
+	sf::Text t_level;
 	chrono::system_clock::time_point m_mess_end_time;
 public:
+	bool is_pc;
 	int id;
 	int m_x, m_y;
 	char name[NAME_SIZE];
-	int hp;
-	int level;
+	int m_hp;
+	int m_level;
 	OBJECT(sf::Texture& t, int x, int y, int x2, int y2) {
 		m_showing = false;
 		m_sprite.setTexture(t);
@@ -69,28 +81,29 @@ public:
 		m_x = x;
 		m_y = y;
 	}
-	void draw() {
-		if (false == m_showing) return;
-		float rx = (m_x - g_left_x) * 65.0f + 1;
-		float ry = (m_y - g_top_y) * 65.0f + 1;
-		m_sprite.setPosition(rx, ry);
-		g_window->draw(m_sprite);
-		auto size = m_name.getGlobalBounds();
-		if (m_mess_end_time < chrono::system_clock::now()) {
-			m_name.setPosition(rx + 32 - size.width / 2, ry - 10);
-			g_window->draw(m_name);
-		}
-		else {
-			m_chat.setPosition(rx + 32 - size.width / 2, ry - 10);
-			g_window->draw(m_chat);
-		}
-	}
+	void draw();
 	void set_name(const char str[]) {
 		m_name.setFont(g_font);
 		m_name.setString(str);
 		if (id < MAX_USER) m_name.setFillColor(sf::Color(255, 255, 255));
 		else m_name.setFillColor(sf::Color(255, 255, 0));
 		m_name.setStyle(sf::Text::Bold);
+	}
+
+	void set_hp(int hp) {
+		t_hp.setFont(g_font);
+		t_hp.setFillColor(sf::Color(255, 0, 0));
+		char buf[100];
+		sprintf_s(buf, "HP:%d", hp);
+		t_hp.setString(buf);
+	}
+
+	void set_level(int level) {
+		t_level.setFont(g_font);
+		t_level.setFillColor(sf::Color(255, 255, 0));
+		char buf[100];
+		sprintf_s(buf, "Level:%d", level);
+		t_level.setString(buf);
 	}
 
 	void set_chat(const char str[]) {
@@ -100,10 +113,49 @@ public:
 		m_chat.setStyle(sf::Text::Bold);
 		m_mess_end_time = chrono::system_clock::now() + chrono::seconds(3);
 	}
+	void set_damage(int atk)
+	{
+		m_hp -= atk;
+	}
 };
+
+bool is_pc(int object_id)
+{
+	return object_id < MAX_USER;
+}
 
 OBJECT avatar;
 unordered_map <int, OBJECT> players;
+
+void OBJECT::draw()
+{
+	if (false == m_showing) return;
+	float rx = (m_x - g_left_x) * 65.0f + 1;
+	float ry = (m_y - g_top_y) * 65.0f + 1;
+	m_sprite.setPosition(rx, ry);
+	g_window->draw(m_sprite);
+	auto size = m_name.getGlobalBounds();
+	if (m_mess_end_time < chrono::system_clock::now()) {
+		m_name.setPosition(rx + 32 - size.width / 2, ry - 10);
+		g_window->draw(m_name);
+
+		set_hp(avatar.m_hp);
+		t_hp.setPosition(rx + 32 - size.width / 2, ry - 30);
+		g_window->draw(t_hp);
+
+		// player만 level 표시
+		if (is_pc)
+		{
+			set_level(avatar.m_level);
+			t_level.setPosition(rx + 32 - size.width / 2, ry - 50);
+			g_window->draw(t_level);
+		}
+	}
+	else {
+		m_chat.setPosition(rx + 32 - size.width / 2, ry - 10);
+		g_window->draw(m_chat);
+	}
+}
 
 OBJECT white_tile;
 OBJECT black_tile;
@@ -113,6 +165,11 @@ sf::Texture* pieces;
 
 void client_initialize()
 {
+	// 랜덤 시드 설정
+	std::random_device rd;  // 시드 생성기
+	std::mt19937 gen(rd()); // 메르센 트위스터 난수 생성기
+	std::uniform_int_distribution<> dis(10, 20); // 10에서 20 사이의 균등 분포
+
 	board = new sf::Texture;
 	pieces = new sf::Texture;
 	board->loadFromFile("fieldmap.bmp");
@@ -124,6 +181,10 @@ void client_initialize()
 	white_tile = OBJECT{ *board, 5, 5, TILE_WIDTH, TILE_WIDTH };
 	black_tile = OBJECT{ *board, 69, 5, TILE_WIDTH, TILE_WIDTH };
 	avatar = OBJECT{ *pieces, 0, 0, 64, 64 };
+
+	CENTRAL_TILE_SPACING_WIDTH = dis(gen);
+	CENTRAL_TILE_SPACING_HEIGHT = dis(gen);
+
 	avatar.move(4, 4);
 }
 
@@ -156,8 +217,9 @@ void ProcessPacket(char* ptr)
 		avatar.set_name(packet->name);
 		g_myid = packet->id;
 		avatar.id = g_myid;
-		avatar.hp = packet->hp;
-		avatar.level = packet->level;
+		avatar.m_hp = packet->hp;
+		avatar.m_level = packet->level;
+		avatar.is_pc = is_pc(packet->id);
 		avatar.move(packet->x, packet->y);
 		g_left_x = packet->x - SCREEN_WIDTH / 2;
 		g_top_y = packet->y - SCREEN_HEIGHT / 2;
@@ -179,6 +241,7 @@ void ProcessPacket(char* ptr)
 		else if (id < MAX_USER) {
 			players[id] = OBJECT{ *pieces, 0, 0, 64, 64 };
 			players[id].id = id;
+			players[id].is_pc = true;
 			players[id].move(my_packet->x, my_packet->y);
 			players[id].set_name(my_packet->name);
 			players[id].show();
@@ -186,6 +249,7 @@ void ProcessPacket(char* ptr)
 		else {
 			players[id] = OBJECT{ *pieces, 256, 0, 64, 64 };
 			players[id].id = id;
+			players[id].is_pc = false;
 			players[id].move(my_packet->x, my_packet->y);
 			players[id].set_name(my_packet->name);
 			players[id].show();
@@ -219,19 +283,26 @@ void ProcessPacket(char* ptr)
 		}
 		break;
 	}
-	//case SC_CHAT:
-	//{
-	//	SC_CHAT_PACKET* my_packet = reinterpret_cast<SC_CHAT_PACKET*>(ptr);
-	//	int other_id = my_packet->id;
-	//	if (other_id == g_myid) {
-	//		avatar.set_chat(my_packet->mess);
-	//	}
-	//	else {
-	//		players[other_id].set_chat(my_packet->mess);
-	//	}
+	case SC_CHAT:
+	{
+		SC_CHAT_PACKET* my_packet = reinterpret_cast<SC_CHAT_PACKET*>(ptr);
+		int other_id = my_packet->id;
+		if (other_id == g_myid) {
+			avatar.set_chat(my_packet->mess);
+		}
+		else {
+			players[other_id].set_chat(my_packet->mess);
+		}
 
-	//	break;
-	//}
+		break;
+	}
+	case SC_ATTACK:
+	{
+		SC_ATTACK_OBJECT_PACKET* my_packet = reinterpret_cast<SC_ATTACK_OBJECT_PACKET*>(ptr);
+		int npc = my_packet->npc;
+		
+		players[my_packet->id].set_damage(my_packet->atk);
+	}
 	default:
 		printf("Unknown PACKET type [%d]\n", ptr[1]);
 	}
@@ -280,7 +351,7 @@ void client_main()
 	if (recv_result != sf::Socket::NotReady)
 		if (received > 0) process_data(net_buf, received);
 
-	for (int i = 0; i < SCREEN_WIDTH; ++i)
+	/*for (int i = 0; i < SCREEN_WIDTH; ++i)
 		for (int j = 0; j < SCREEN_HEIGHT; ++j)
 		{
 			int tile_x = i + g_left_x;
@@ -295,6 +366,31 @@ void client_main()
 				black_tile.a_move(TILE_WIDTH * i, TILE_WIDTH * j);
 				black_tile.a_draw();
 			}
+		}*/
+
+	for (int i = 0; i < SCREEN_WIDTH; ++i)
+		for (int j = 0; j < SCREEN_HEIGHT; ++j)
+		{
+			int tile_x = i + g_left_x;
+			int tile_y = j + g_top_y;
+			if ((tile_x < 0) || (tile_y < 0)) continue;
+
+			// 가장자리 조건을 타일의 절대 좌표로 결정
+			bool is_edge = tile_x < TILE_BORDER || tile_x >= TOTAL_MAP_WIDTH - TILE_BORDER ||
+				tile_y < TILE_BORDER || tile_y >= TOTAL_MAP_HEIGHT - TILE_BORDER;
+
+			// 중앙에 간격을 두고 검은 타일을 배치하는 조건
+			bool is_central_black_tile = (tile_x % CENTRAL_TILE_SPACING_WIDTH == 0) && (tile_y % CENTRAL_TILE_SPACING_HEIGHT == 0);
+
+			if (is_edge || is_central_black_tile) {
+				black_tile.a_move(TILE_WIDTH * i, TILE_WIDTH * j);
+				black_tile.a_draw();
+			}
+			else
+			{
+				white_tile.a_move(TILE_WIDTH * i, TILE_WIDTH * j);
+				white_tile.a_draw();
+			}
 		}
 	avatar.draw();
 	for (auto& pl : players) pl.second.draw();
@@ -303,11 +399,11 @@ void client_main()
 	text.setFillColor(sf::Color(0, 0, 0));
 	char buf[100];
 
-	sprintf_s(buf, "player HP: %d", avatar.hp);
+	sprintf_s(buf, "player HP: %d", avatar.m_hp);
 	text.setString(buf);
 	g_window->draw(text);
 
-	sprintf_s(buf, "player Level: %d", avatar.level);
+	sprintf_s(buf, "player Level: %d", avatar.m_level);
 	text.setString(buf);
 	text.setPosition(0.0f, 25.0f);
 	g_window->draw(text);
@@ -397,6 +493,13 @@ int main()
 					break;
 				case sf::Keyboard::Down:
 					direction = 1;
+					break;
+				case sf::Keyboard::A:
+					direction = -1;
+					CS_ATTACK_PACKET p;
+					p.size = sizeof(p);
+					p.type = CS_ATTACK;
+					send_packet(&p);
 					break;
 				case sf::Keyboard::Escape:
 					window.close();
