@@ -139,7 +139,7 @@ void OBJECT::draw()
 		m_name.setPosition(rx + 32 - size.width / 2, ry - 10);
 		g_window->draw(m_name);
 
-		set_hp(avatar.m_hp);
+		set_hp(m_hp);
 		t_hp.setPosition(rx + 32 - size.width / 2, ry - 30);
 		g_window->draw(t_hp);
 
@@ -249,6 +249,7 @@ void ProcessPacket(char* ptr)
 		else {
 			players[id] = OBJECT{ *pieces, 256, 0, 64, 64 };
 			players[id].id = id;
+			players[id].m_hp = 100;
 			players[id].is_pc = false;
 			players[id].move(my_packet->x, my_packet->y);
 			players[id].set_name(my_packet->name);
@@ -301,7 +302,8 @@ void ProcessPacket(char* ptr)
 		SC_ATTACK_OBJECT_PACKET* my_packet = reinterpret_cast<SC_ATTACK_OBJECT_PACKET*>(ptr);
 		int npc = my_packet->npc;
 		
-		players[my_packet->id].set_damage(my_packet->atk);
+		players[npc].m_hp -= my_packet->atk;
+		break;
 	}
 	default:
 		printf("Unknown PACKET type [%d]\n", ptr[1]);

@@ -374,8 +374,6 @@ void process_packet(int c_id, char* packet)
 	case CS_ATTACK: {
 		CS_ATTACK_PACKET* p = reinterpret_cast<CS_ATTACK_PACKET*>(packet);
 
-		std::cout << "npc 공격1" << std::endl;
-
 		// 8방향에 몬스터가 있는지 체크
 		for (auto& cl : objects) {
 			if (cl._state != ST_INGAME) continue;
@@ -383,7 +381,8 @@ void process_packet(int c_id, char* packet)
 				if (can_attack(c_id, cl._id))
 				{
 					// 공격으로 npc가 죽었는지 체크
-					if (cl.hp - objects[c_id].atk <= 0)
+					cl.hp -= objects[c_id].atk;
+					if (cl.hp <= 0)
 					{
 						cl._state = ST_FREE;
 						objects[c_id].send_remove_player_packet(cl._id);
@@ -624,6 +623,8 @@ void InitializeNPC()
 		objects[i].x = rand() % W_WIDTH;
 		objects[i].y = rand() % W_HEIGHT;
 		objects[i]._id = i;
+		objects[i].hp = 100;
+		objects[i].atk = 10;
 		sprintf_s(objects[i]._name, "NPC%d", i);
 		objects[i]._state = ST_INGAME;
 
