@@ -75,6 +75,8 @@ public:
 	int hp;
 	int level;
 	int atk;
+	int exp;
+	int max_exp;
 	int		_prev_remain;
 	unordered_set <int> _view_list;
 	mutex	_vl;
@@ -129,6 +131,8 @@ public:
 		p.level = level;
 		p.x = x;
 		p.y = y;
+		p.exp = exp;
+		p.max_exp = max_exp;
 		do_send(&p);
 	}
 	void send_move_packet(int c_id);
@@ -151,6 +155,7 @@ public:
 		do_send(&p);
 	}
 	void send_attack_packet(int c_id, int npc);
+	void send_monster_dead(int c_id, int npc);
 };
 
 HANDLE h_iocp;
@@ -246,6 +251,20 @@ void SESSION::send_attack_packet(int p_id, int npc)
 	do_send(&packet);
 }
 
+void SESSION::send_monster_dead(int p_id, int npc)
+{
+	SC_DEAD_MONSTER_PACKET packet;
+	packet.size = sizeof(packet);
+	packet.type = SC_MONSTER_DEAD;
+	packet.id = p_id;
+	packet.npc = npc;
+	packet.level = level;
+	packet.exp = exp;
+	packet.max_exp = max_exp;
+	do_send(&packet);
+}
+
+
 int get_new_client_id()
 {
 	for (int i = 0; i < MAX_USER; ++i) {
@@ -277,6 +296,23 @@ bool can_attack(int pc, int npc)
 	return abs(objects[pc].y - objects[npc].y) <= 1;
 }
 
+void update_level(int c_id)
+{
+	int EXP = 20;
+	objects[c_id].exp += EXP;
+
+	if (objects[c_id].exp >= objects[c_id].max_exp)
+	{
+		// 레벨업
+		objects[c_id].max_exp = objects[c_id].max_exp * 2;
+		objects[c_id].exp = 0;
+		objects[c_id].level += 1;
+	}
+
+	// DB 업데이트
+	db->update_level(c_id, objects[c_id].level, objects[c_id].exp, objects[c_id].max_exp);
+}
+
 void process_packet(int c_id, char* packet)
 {
 	switch (packet[1]) {
@@ -303,6 +339,8 @@ void process_packet(int c_id, char* packet)
 					objects[c_id].level = db->getLevel();
 					objects[c_id].x = db->getPosX();
 					objects[c_id].y = db->getPosY();
+					objects[c_id].exp = db->getExp();
+					objects[c_id].max_exp = db->getMaxExp();
 					objects[c_id]._state = ST_INGAME;
 				}
 			}
@@ -401,6 +439,8 @@ void process_packet(int c_id, char* packet)
 					if (cl.hp <= 0)
 					{
 						cl._state = ST_FREE;
+						update_level(c_id);
+						objects[c_id].send_monster_dead(c_id, cl._id);
 						objects[c_id].send_remove_player_packet(cl._id);
 					}
 					else

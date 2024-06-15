@@ -93,6 +93,8 @@ bool DB::check_id(int id)
                         retcode = SQLBindCol(hstmt, 4, SQL_C_SHORT, &dPosX, 10, &cbPosX);
                         retcode = SQLBindCol(hstmt, 5, SQL_C_SHORT, &dPosY, 10, &cbPosY);
                         retcode = SQLBindCol(hstmt, 6, SQL_C_SHORT, &dHp, 10, &cbHp);
+                        retcode = SQLBindCol(hstmt, 7, SQL_C_SHORT, &dExp, 10, &cbExp);
+                        retcode = SQLBindCol(hstmt, 8, SQL_C_SHORT, &dMaxExp, 10, &cbMaxExp);
 
                         // Fetch and print each row of data. On an error, display a message and exit.  
                         for (int i = 0; ; i++) {
@@ -106,7 +108,7 @@ bool DB::check_id(int id)
                                 //warning C4477: 'wprintf' : format string '%S' requires an argument of type 'char *'
                                 //but variadic argument 2 has type 'SQLWCHAR *'
                                 //wprintf(L"%d: %S %S %S\n", i + 1, sCustID, szName, szPhone);  
-                                wprintf(L"[DB 읽기] USER | %d: %6d %20s %3d %3d %3d %3d\n", i + 1, dId, szName, dLevel, dPosX, dPosY, dHp);
+                                wprintf(L"[DB 읽기] USER | %d: %6d %20s %3d %3d %3d %3d %3d %3d\n", i + 1, dId, szName, dLevel, dPosX, dPosY, dHp, dExp, dMaxExp);
 
                                 name = ConvertWCtoC(szName);
 
@@ -115,6 +117,9 @@ bool DB::check_id(int id)
 
                                 posX = static_cast<short>(dPosX);
                                 posY = static_cast<short>(dPosY);
+
+                                exp = static_cast<int>(dExp);
+                                max_exp = static_cast<int>(dMaxExp);
 
                                 return true;
                             }
@@ -199,6 +204,89 @@ void DB::update_pos(int id, short x, short y)
                                 //but variadic argument 2 has type 'SQLWCHAR *'
                                 //wprintf(L"%d: %S %S %S\n", i + 1, sCustID, szName, szPhone);  
                                 wprintf(L"[DB 갱신] pos %d: %3d %3d\n", i + 1, dId, dPosX, dPosY);
+
+                                return;
+                            }
+                            else
+                            {
+                                disp_error(hstmt, SQL_HANDLE_STMT, retcode);
+                                return;
+                            }
+
+                        }
+                    }
+                    else {
+                        disp_error(hstmt, SQL_HANDLE_STMT, retcode);
+                        return;
+                    }
+
+
+                    // Process data  
+                    if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+                        SQLCancel(hstmt);
+                        SQLFreeHandle(SQL_HANDLE_STMT, hstmt);
+                    }
+
+                    SQLDisconnect(hdbc);
+                }
+
+                SQLFreeHandle(SQL_HANDLE_DBC, hdbc);
+            }
+        }
+        SQLFreeHandle(SQL_HANDLE_ENV, henv);
+    }
+
+    return;
+}
+
+void DB::update_level(int id, int level, int exp, int max_exp)
+{
+    // Allocate environment handle  
+    retcode = SQLAllocHandle(SQL_HANDLE_ENV, SQL_NULL_HANDLE, &henv);
+
+    // Set the ODBC version environment attribute  
+    if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+        retcode = SQLSetEnvAttr(henv, SQL_ATTR_ODBC_VERSION, (SQLPOINTER*)SQL_OV_ODBC3, 0);
+
+        // Allocate connection handle  
+        if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+            retcode = SQLAllocHandle(SQL_HANDLE_DBC, henv, &hdbc);
+
+            // Set login timeout to 5 seconds  
+            if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+                SQLSetConnectAttr(hdbc, SQL_LOGIN_TIMEOUT, (SQLPOINTER)5, 0);
+
+                // Connect to data source  
+                retcode = SQLConnect(hdbc, (SQLWCHAR*)L"2018156032_GameServer_TF", SQL_NTS, (SQLWCHAR*)NULL, 0, NULL, 0);
+
+                // Allocate statement handle  
+                if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+                    retcode = SQLAllocHandle(SQL_HANDLE_STMT, hdbc, &hstmt);
+
+                    swprintf(query, sizeof(query) / sizeof(wchar_t), L"EXEC update_level %d, %d, %d, %d", id, level, exp, max_exp);
+                    retcode = SQLExecDirect(hstmt, query, SQL_NTS);
+                    std::cout << query << std::endl;
+                    if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
+
+                        // Bind columns 1, 2, and 3  
+                        retcode = SQLBindCol(hstmt, 1, SQL_C_LONG, &dId, 10, &cbId);
+                        retcode = SQLBindCol(hstmt, 2, SQL_C_SHORT, &dLevel, 10, &cbLevel);
+                        retcode = SQLBindCol(hstmt, 3, SQL_C_SHORT, &dExp, 10, &cbExp);
+                        retcode = SQLBindCol(hstmt, 4, SQL_C_SHORT, &dMaxExp, 10, &cbMaxExp);
+
+                        // Fetch and print each row of data. On an error, display a message and exit.  
+                        for (int i = 0; ; i++) {
+                            retcode = SQLFetch(hstmt);
+                            if (retcode == SQL_ERROR)
+                                show_error();
+                            if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO)
+                            {
+                                //replace wprintf with printf
+                                //%S with %ls
+                                //warning C4477: 'wprintf' : format string '%S' requires an argument of type 'char *'
+                                //but variadic argument 2 has type 'SQLWCHAR *'
+                                //wprintf(L"%d: %S %S %S\n", i + 1, sCustID, szName, szPhone);  
+                                wprintf(L"[DB 갱신] level %d: %3d %3d %3d\n", i + 1, dId, dLevel, dExp, dMaxExp);
 
                                 return;
                             }

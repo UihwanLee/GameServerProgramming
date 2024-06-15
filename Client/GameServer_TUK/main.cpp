@@ -103,6 +103,8 @@ public:
 	char name[NAME_SIZE];
 	int m_hp;
 	int m_level;
+	int m_exp;
+	int m_max_exp;
 	OBJECT(sf::Texture& t, int x, int y, int x2, int y2) {
 		m_showing = false;
 		m_sprite.setTexture(t);
@@ -287,6 +289,8 @@ void ProcessPacket(char* ptr)
 		avatar.id = g_myid;
 		avatar.m_hp = packet->hp;
 		avatar.m_level = packet->level;
+		avatar.m_exp = packet->exp;
+		avatar.m_max_exp = packet->max_exp;
 		avatar.is_pc = is_pc(packet->id);
 		avatar.move(packet->x, packet->y);
 		g_left_x = packet->x - SCREEN_WIDTH / 2;
@@ -376,6 +380,28 @@ void ProcessPacket(char* ptr)
 		play_sound_effect("SE_Slash.wav");
 
 		players[npc].set_damage(my_packet->atk);
+		break;
+	}
+	case SC_MONSTER_DEAD:
+	{
+		SC_DEAD_MONSTER_PACKET* my_packet = reinterpret_cast<SC_DEAD_MONSTER_PACKET*>(ptr);
+		int npc = my_packet->npc;
+
+		std::cout << "몬스터 죽음!" << std::endl;
+
+		// 효과음 재생
+		volume = 100.0f;
+		play_sound_effect("SE_MonsterDead.wav");
+
+		// 레벨업 했는지 체크
+		if (avatar.m_level < my_packet->level)
+		{
+			play_sound_effect("SE_LevelUp.wav");
+		}
+		avatar.m_level = my_packet->level;
+		avatar.m_exp = my_packet->exp;
+		avatar.m_max_exp = my_packet->max_exp;
+
 		break;
 	}
 	default:
@@ -474,11 +500,11 @@ void client_main()
 	text.setFillColor(sf::Color(0, 0, 0));
 	char buf[100];
 
-	sprintf_s(buf, "player HP: %d", avatar.m_hp);
+	sprintf_s(buf, "player exp: (%d/%d)", avatar.m_exp, avatar.m_max_exp);
 	text.setString(buf);
 	g_window->draw(text);
 
-	sprintf_s(buf, "player Level: %d", avatar.m_level);
+	/*sprintf_s(buf, "player Level: %d", avatar.m_level);
 	text.setString(buf);
 	text.setPosition(0.0f, 25.0f);
 	g_window->draw(text);
@@ -487,6 +513,11 @@ void client_main()
 	text.setString(buf);
 	text.setPosition(0.0f, 50.0f);
 	g_window->draw(text);
+
+	sprintf_s(buf, "player exp: (%d, %d)", avatar.m_x, avatar.m_y);
+	text.setString(buf);
+	text.setPosition(0.0f, 50.0f);
+	g_window->draw(text);*/
 
 }
 

@@ -26,7 +26,9 @@ private:
     SQLSMALLINT dPosX;
     SQLSMALLINT dPosY;
     SQLSMALLINT dHp;
-    SQLLEN cbName, cbLevel, cbId, cbPosX, cbPosY, cbHp;
+    SQLSMALLINT dExp;
+    SQLSMALLINT dMaxExp;
+    SQLLEN cbName, cbLevel, cbId, cbPosX, cbPosY, cbHp, cbExp, cbMaxExp;
     wchar_t query[256];
 
     short posX;
@@ -34,6 +36,8 @@ private:
     char* name;
     int   hp;
     int   level;
+    int   exp;
+    int   max_exp;
 
 public:
     DB();
@@ -44,11 +48,14 @@ public:
 
     bool check_id(int id);
     void update_pos(int id, short x, short y);
+    void update_level(int id, int level, int exp, int max_exp);
 
     char* getName() { return name; }
     short getPosX() { return posX; }
     short getPosY() { return posY; }
     int   getHP() { return hp; }
     int   getLevel() { return level; }
+    int   getExp() { return exp; }
+    int   getMaxExp() { return max_exp; }
 };
 
