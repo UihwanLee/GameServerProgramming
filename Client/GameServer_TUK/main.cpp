@@ -1,10 +1,13 @@
 #include <SFML/Graphics.hpp>
 #include <SFML/Network.hpp>
+#include <SFML/Audio.hpp>
 #include <iostream>
 #include <unordered_map>
 #include <Windows.h>
 #include <chrono>
 #include <random>
+#include <thread>
+
 using namespace std;
 
 #include "..\..\Server\GamerServer_Server\protocol.h"
@@ -33,6 +36,54 @@ int g_myid;
 sf::RenderWindow* g_window;
 sf::Font g_font;
 
+float volume = 100.0f;
+
+void play_bgm(const std::string& filename)
+{
+	std::thread([filename]()
+		{
+			sf::SoundBuffer buffer;
+
+			if (!buffer.loadFromFile(filename))
+			{
+				std::cout << "load 에러" << std::endl;
+				return;
+			}
+
+			// 재생
+			sf::Sound sound(buffer);
+			sound.play();
+
+			// 무한 루프
+			while (sound.getStatus() == sf::Sound::Playing)
+			{
+				sf::sleep(sf::milliseconds(100));
+			}
+		}).detach();
+}
+
+void play_sound_effect(const std::string& filename)
+{
+	std::thread([filename]()
+		{
+			sf::SoundBuffer buffer;
+
+			if (!buffer.loadFromFile(filename))
+			{
+				std::cout << "load 에러" << std::endl;
+				return;
+			}
+
+			// 재생
+			sf::Sound sound(buffer);
+			sound.setVolume(volume);
+			sound.play();
+
+			// 소리가 끝날 때까지 대기
+			sf::sleep(sf::seconds(buffer.getDuration().asSeconds()));
+		}).detach();
+}
+
 class OBJECT {
 private:
 	bool m_showing;
@@ -42,7 +93,9 @@ private:
 	sf::Text m_chat;
 	sf::Text t_hp;
 	sf::Text t_level;
+	sf::Text t_damge;
 	chrono::system_clock::time_point m_mess_end_time;
+	chrono::system_clock::time_point m_damge_end_time;
 public:
 	bool is_pc;
 	int id;
@@ -113,9 +166,18 @@ public:
 		m_chat.setStyle(sf::Text::Bold);
 		m_mess_end_time = chrono::system_clock::now() + chrono::seconds(3);
 	}
+
 	void set_damage(int atk)
 	{
 		m_hp -= atk;
+
+		t_damge.setFont(g_font);
+		char buf[100];
+		sprintf_s(buf, "-%d", atk);
+		t_damge.setString(buf);
+		t_damge.setFillColor(sf::Color(255, 0, 0));
+		t_damge.setStyle(sf::Text::Bold);
+		m_damge_end_time = chrono::system_clock::now() + chrono::seconds(1);
 	}
 };
 
@@ -154,6 +216,12 @@ void OBJECT::draw()
 	else {
 		m_chat.setPosition(rx + 32 - size.width / 2, ry - 10);
 		g_window->draw(m_chat);
+	}
+
+	if (m_damge_end_time >= chrono::system_clock::now())
+	{
+		t_damge.setPosition(rx + 70 - size.width / 2, ry + 5);
+		g_window->draw(t_damge);
 	}
 }
 
@@ -224,6 +292,7 @@ void ProcessPacket(char* ptr)
 		g_left_x = packet->x - SCREEN_WIDTH / 2;
 		g_top_y = packet->y - SCREEN_HEIGHT / 2;
 		avatar.show();
+		play_bgm("bgm.wav");
 	}
 	break;
 
@@ -302,7 +371,11 @@ void ProcessPacket(char* ptr)
 		SC_ATTACK_OBJECT_PACKET* my_packet = reinterpret_cast<SC_ATTACK_OBJECT_PACKET*>(ptr);
 		int npc = my_packet->npc;
 		
-		players[npc].m_hp -= my_packet->atk;
+		// 효과음 재생
+		volume = 50.0f;
+		play_sound_effect("SE_Slash.wav");
+
+		players[npc].set_damage(my_packet->atk);
 		break;
 	}
 	default:
