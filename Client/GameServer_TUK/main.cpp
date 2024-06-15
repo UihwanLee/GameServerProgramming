@@ -471,7 +471,7 @@ int main()
 	send_packet(&p);
 	avatar.set_name(p.name);
 
-	sf::RenderWindow window(sf::VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT), "2D CLIENT");
+	sf::RenderWindow window(sf::VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT), "LEGEND DUNGUN");
 	g_window = &window;
 
 	while (window.isOpen())

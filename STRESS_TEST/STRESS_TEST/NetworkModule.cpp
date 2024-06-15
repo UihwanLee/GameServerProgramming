@@ -29,6 +29,7 @@ const static int MAX_BUFF_SIZE = 255;
 
 #include "..\..\Server\GamerServer_Server\protocol.h"
 
+
 HANDLE g_hiocp;
 
 enum OPTYPE { OP_SEND, OP_RECV, OP_DO_MOVE };
@@ -126,6 +127,7 @@ void SendPacket(int cl, void* packet)
 
 void ProcessPacket(int ci, unsigned char packet[])
 {
+	std::cout << packet[1] << std::endl;
 	switch (packet[1]) {
 	case SC_MOVE_OBJECT: {
 		SC_MOVE_OBJECT_PACKET* move_packet = reinterpret_cast<SC_MOVE_OBJECT_PACKET*>(packet);
@@ -148,7 +150,7 @@ void ProcessPacket(int ci, unsigned char packet[])
 					   break;
 	case SC_ADD_OBJECT: break;
 	case SC_REMOVE_OBJECT: break;
-	case SC_EVENT: break;
+	case SC_CHAT: break;
 	case SC_LOGIN_INFO:
 	{
 		g_clients[ci].connected = true;
@@ -166,8 +168,11 @@ void ProcessPacket(int ci, unsigned char packet[])
 		//SendPacket(my_id, &t_packet);
 	}
 	break;
-	default: MessageBox(hWnd, L"Unknown Packet Type", L"ERROR", 0);
-		while (true);
+	default: 
+	{
+		std::cout << packet[1] << std::endl;
+		break;
+	}
 	}
 }
 
@@ -319,6 +324,7 @@ void Adjust_Number_Of_Client()
 	int temp = num_connections;
 	sprintf_s(l_packet.name, "%d", temp);
 	l_packet.size = sizeof(l_packet);
+	l_packet.id = 0;
 	l_packet.type = CS_LOGIN;
 	SendPacket(num_connections, &l_packet);
 

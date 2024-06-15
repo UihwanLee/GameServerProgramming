@@ -283,8 +283,8 @@ void process_packet(int c_id, char* packet)
 	case CS_LOGIN: {
 		CS_LOGIN_PACKET* p = reinterpret_cast<CS_LOGIN_PACKET*>(packet);
 
-		// DB에 로그인 정보가 있는지 확인
-		if (false == (db->check_id(p->id)))
+		// DB에 로그인 정보가 있는지 확인: 0이면 STRESS TEST
+		if (false == (db->check_id(p->id)) && p->id != 0)
 		{
 			objects[c_id].send_login_fail_packet();
 			return;
@@ -292,15 +292,31 @@ void process_packet(int c_id, char* packet)
 
 		objects[c_id]._dbId = p->id;
 
-		errno_t err = strcpy_s(objects[c_id]._name, sizeof(objects[c_id]._name), db->getName());
+		if (p->id > 0)
 		{
-			lock_guard<mutex> ll{ objects[c_id]._s_lock };
-			objects[c_id].hp = db->getHP();
-			objects[c_id].level = db->getLevel();
-			objects[c_id].x = db->getPosX();
-			objects[c_id].y = db->getPosY();
-			objects[c_id]._state = ST_INGAME;
+			errno_t err = strcpy_s(objects[c_id]._name, sizeof(objects[c_id]._name), db->getName());
+			{
+				lock_guard<mutex> ll{ objects[c_id]._s_lock };
+				if (p->id > 0)
+				{
+					objects[c_id].hp = db->getHP();
+					objects[c_id].level = db->getLevel();
+					objects[c_id].x = db->getPosX();
+					objects[c_id].y = db->getPosY();
+					objects[c_id]._state = ST_INGAME;
+				}
+			}
 		}
+		else
+		{
+			errno_t err = strcpy_s(objects[c_id]._name, sizeof(objects[c_id]._name), "TEST");
+			objects[c_id].x = rand() % W_WIDTH;
+			objects[c_id].y = rand() % W_HEIGHT;
+			objects[c_id]._state = ST_INGAME;
+			objects[c_id].hp = 100;
+			objects[c_id].level = 0;
+		}
+
 		objects[c_id].send_login_info_packet();
 		for (auto& pl : objects) {
 			{
@@ -341,7 +357,7 @@ void process_packet(int c_id, char* packet)
 				near_list.insert(cl._id);
 		}
 
-		db->update_pos(objects[c_id]._dbId, x, y);
+		if(objects[c_id]._dbId > 0) db->update_pos(objects[c_id]._dbId, x, y);
 		objects[c_id].send_move_packet(c_id);
 
 		for (auto& pl : near_list) {
