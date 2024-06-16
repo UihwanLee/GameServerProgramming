@@ -180,7 +180,6 @@ void DB::update_pos(int id, short x, short y)
 
                     swprintf(query, sizeof(query) / sizeof(wchar_t), L"EXEC update_pos %d, %d, %d", id, x, y);
                     retcode = SQLExecDirect(hstmt, query, SQL_NTS);
-                    std::cout << query << std::endl;
                     if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
 
                         // Bind columns 1, 2, and 3  
@@ -265,7 +264,6 @@ void DB::update_level(int id, int level, int exp, int max_exp)
 
                     swprintf(query, sizeof(query) / sizeof(wchar_t), L"EXEC update_level %d, %d, %d, %d", id, level, exp, max_exp);
                     retcode = SQLExecDirect(hstmt, query, SQL_NTS);
-                    std::cout << query << std::endl;
                     if (retcode == SQL_SUCCESS || retcode == SQL_SUCCESS_WITH_INFO) {
 
                         // Bind columns 1, 2, and 3  

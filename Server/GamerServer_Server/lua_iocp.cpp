@@ -310,7 +310,7 @@ void update_level(int c_id)
 	}
 
 	// DB 업데이트
-	db->update_level(c_id, objects[c_id].level, objects[c_id].exp, objects[c_id].max_exp);
+	db->update_level(objects[c_id]._dbId, objects[c_id].level, objects[c_id].exp, objects[c_id].max_exp);
 }
 
 void process_packet(int c_id, char* packet)
@@ -442,10 +442,42 @@ void process_packet(int c_id, char* packet)
 						update_level(c_id);
 						objects[c_id].send_monster_dead(c_id, cl._id);
 						objects[c_id].send_remove_player_packet(cl._id);
+
+						// broadcast
+						for (auto& pl : objects) {
+							{
+								lock_guard<mutex> ll(pl._s_lock);
+								if (ST_INGAME != pl._state) continue;
+							}
+							if (pl._id == c_id) continue;
+							if (false == can_see(c_id, pl._id))
+								continue;
+							if (is_pc(pl._id))
+							{
+								pl.send_monster_dead(c_id, cl._id);
+								pl.send_remove_player_packet(cl._id);
+							}
+						}
 					}
 					else
 					{
 						objects[c_id].send_attack_packet(c_id, cl._id);
+
+						// broadcast
+						for (auto& pl : objects) {
+							{
+								lock_guard<mutex> ll(pl._s_lock);
+								if (ST_INGAME != pl._state) continue;
+							}
+							if (pl._id == c_id) continue;
+							if (false == can_see(c_id, pl._id))
+								continue;
+							if (is_pc(pl._id))
+							{
+								pl.send_attack_packet(c_id, cl._id);
+
+							}
+						}
 					}
 				}
 			}

@@ -374,12 +374,19 @@ void ProcessPacket(char* ptr)
 	{
 		SC_ATTACK_OBJECT_PACKET* my_packet = reinterpret_cast<SC_ATTACK_OBJECT_PACKET*>(ptr);
 		int npc = my_packet->npc;
-		
-		// 효과음 재생
-		volume = 50.0f;
-		play_sound_effect("SE_Slash.wav");
 
-		players[npc].set_damage(my_packet->atk);
+		int other_id = my_packet->id;
+		if (other_id == g_myid) {
+			// 효과음 재생
+			volume = 50.0f;
+			play_sound_effect("SE_Slash.wav");
+
+			players[npc].set_damage(my_packet->atk);
+		}
+		else
+		{
+			players[npc].set_damage(my_packet->atk);
+		}
 		break;
 	}
 	case SC_MONSTER_DEAD:
@@ -387,20 +394,27 @@ void ProcessPacket(char* ptr)
 		SC_DEAD_MONSTER_PACKET* my_packet = reinterpret_cast<SC_DEAD_MONSTER_PACKET*>(ptr);
 		int npc = my_packet->npc;
 
-		std::cout << "몬스터 죽음!" << std::endl;
+		int other_id = my_packet->id;
+		if (other_id == g_myid) {
+			// 효과음 재생
+			volume = 100.0f;
+			play_sound_effect("SE_MonsterDead.wav");
 
-		// 효과음 재생
-		volume = 100.0f;
-		play_sound_effect("SE_MonsterDead.wav");
-
-		// 레벨업 했는지 체크
-		if (avatar.m_level < my_packet->level)
-		{
-			play_sound_effect("SE_LevelUp.wav");
+			// 레벨업 했는지 체크
+			if (avatar.m_level < my_packet->level)
+			{
+				play_sound_effect("SE_LevelUp.wav");
+			}
+			avatar.m_level = my_packet->level;
+			avatar.m_exp = my_packet->exp;
+			avatar.m_max_exp = my_packet->max_exp;
 		}
-		avatar.m_level = my_packet->level;
-		avatar.m_exp = my_packet->exp;
-		avatar.m_max_exp = my_packet->max_exp;
+		else
+		{
+			players[other_id].m_level = my_packet->level;
+			players[other_id].m_exp = my_packet->exp;
+			players[other_id].m_max_exp = my_packet->max_exp;
+		}
 
 		break;
 	}
@@ -504,12 +518,12 @@ void client_main()
 	text.setString(buf);
 	g_window->draw(text);
 
-	/*sprintf_s(buf, "player Level: %d", avatar.m_level);
+	sprintf_s(buf, "player Pos: (%d, %d", avatar.m_x, avatar.m_y);
 	text.setString(buf);
 	text.setPosition(0.0f, 25.0f);
 	g_window->draw(text);
 
-	sprintf_s(buf, "player pos: (%d, %d)", avatar.m_x, avatar.m_y);
+	/*sprintf_s(buf, "player pos: (%d, %d)", avatar.m_x, avatar.m_y);
 	text.setString(buf);
 	text.setPosition(0.0f, 50.0f);
 	g_window->draw(text);
