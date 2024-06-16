@@ -425,6 +425,27 @@ void process_packet(int c_id, char* packet)
 			}
 	}
 				break;
+	case CS_CHAT: {
+		CS_CHAT_PACKET* p = reinterpret_cast<CS_CHAT_PACKET*>(packet);
+
+		objects[c_id].send_chat_packet(c_id, p->mess);
+
+		// broadcast
+		for (auto& pl : objects) {
+			{
+				lock_guard<mutex> ll(pl._s_lock);
+				if (ST_INGAME != pl._state) continue;
+			}
+			if (pl._id == c_id) continue;
+			if (false == can_see(c_id, pl._id))
+				continue;
+			if (is_pc(pl._id))
+			{
+				pl.send_chat_packet(c_id, p->mess);
+			}
+		}
+	}
+				break;
 	case CS_ATTACK: {
 		CS_ATTACK_PACKET* p = reinterpret_cast<CS_ATTACK_PACKET*>(packet);
 

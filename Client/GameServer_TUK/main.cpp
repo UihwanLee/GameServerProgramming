@@ -38,6 +38,9 @@ sf::Font g_font;
 
 float volume = 100.0f;
 
+bool chatMode = false;
+std::string m_chat;
+
 void play_bgm(const std::string& filename)
 {
 	std::thread([filename]()
@@ -244,7 +247,7 @@ void client_initialize()
 	pieces = new sf::Texture;
 	board->loadFromFile("fieldmap.bmp");
 	pieces->loadFromFile("character.png");
-	if (false == g_font.loadFromFile("cour.ttf")) {
+	if (false == g_font.loadFromFile("Maplestory Bold.ttf")) {
 		cout << "Font Loading Error!\n";
 		exit(-1);
 	}
@@ -523,12 +526,11 @@ void client_main()
 	text.setPosition(0.0f, 25.0f);
 	g_window->draw(text);
 
-	/*sprintf_s(buf, "player pos: (%d, %d)", avatar.m_x, avatar.m_y);
-	text.setString(buf);
+	text.setString(m_chat);
 	text.setPosition(0.0f, 50.0f);
 	g_window->draw(text);
 
-	sprintf_s(buf, "player exp: (%d, %d)", avatar.m_x, avatar.m_y);
+	/*sprintf_s(buf, "player exp: (%d, %d)", avatar.m_x, avatar.m_y);
 	text.setString(buf);
 	text.setPosition(0.0f, 50.0f);
 	g_window->draw(text);*/
@@ -600,37 +602,81 @@ int main()
 			if (event.type == sf::Event::Closed)
 				window.close();
 			if (event.type == sf::Event::KeyPressed) {
-				int direction = -1;
-				switch (event.key.code) {
-				case sf::Keyboard::Left:
-					direction = 2;
-					break;
-				case sf::Keyboard::Right:
-					direction = 3;
-					break;
-				case sf::Keyboard::Up:
-					direction = 0;
-					break;
-				case sf::Keyboard::Down:
-					direction = 1;
-					break;
-				case sf::Keyboard::A:
-					direction = -1;
-					CS_ATTACK_PACKET p;
-					p.size = sizeof(p);
-					p.type = CS_ATTACK;
-					send_packet(&p);
-					break;
-				case sf::Keyboard::Escape:
-					window.close();
-					break;
+				if (chatMode) {
+					if (event.key.code == sf::Keyboard::Enter)
+					{
+						// chat 보내기
+						CS_CHAT_PACKET p;
+						p.size = sizeof(p);
+						p.type = CS_CHAT;
+						strncpy_s(p.mess, m_chat.c_str(), sizeof(p.mess) - 1);
+						p.mess[sizeof(p.mess) - 1] = '\0';
+						send_packet(&p);
+
+						// chat 초기화
+						m_chat.clear();
+						chatMode = false;
+					}
+					else if (event.key.code == sf::Keyboard::Escape || event.key.code == sf::Keyboard::C)
+					{
+						m_chat.clear();
+						chatMode = false;
+					}
+					else
+					{
+						// 키보드 입력을 받아 m_chat에 저장하기
+						if (event.key.code == sf::Keyboard::BackSpace) {
+							if (!m_chat.empty()) {
+								m_chat.pop_back();
+							}
+						}
+						else {
+							// SFML에서 직접 한글 입력을 처리하려면 추가 코드가 필요할 수 있음
+							const sf::Keyboard::Key keycode = event.key.code;
+							if (keycode >= sf::Keyboard::A && keycode <= sf::Keyboard::Z) {
+								char chr = static_cast<char>(keycode - sf::Keyboard::A + 'a');
+								m_chat += chr;
+							}
+						}
+					}
 				}
-				if (-1 != direction) {
-					CS_MOVE_PACKET p;
-					p.size = sizeof(p);
-					p.type = CS_MOVE;
-					p.direction = direction;
-					send_packet(&p);
+				else
+				{
+					int direction = -1;
+					switch (event.key.code) {
+					case sf::Keyboard::Left:
+						direction = 2;
+						break;
+					case sf::Keyboard::Right:
+						direction = 3;
+						break;
+					case sf::Keyboard::Up:
+						direction = 0;
+						break;
+					case sf::Keyboard::Down:
+						direction = 1;
+						break;
+					case sf::Keyboard::A:
+						direction = -1;
+						CS_ATTACK_PACKET p;
+						p.size = sizeof(p);
+						p.type = CS_ATTACK;
+						send_packet(&p);
+						break;
+					case sf::Keyboard::C:
+						chatMode = true;
+						break;
+					case sf::Keyboard::Escape:
+						window.close();
+						break;
+					}
+					if (-1 != direction) {
+						CS_MOVE_PACKET p;
+						p.size = sizeof(p);
+						p.type = CS_MOVE;
+						p.direction = direction;
+						send_packet(&p);
+					}
 				}
 
 			}
