@@ -97,8 +97,10 @@ private:
 	sf::Text t_hp;
 	sf::Text t_level;
 	sf::Text t_damge;
+	sf::Text m_log;
 	chrono::system_clock::time_point m_mess_end_time;
 	chrono::system_clock::time_point m_damge_end_time;
+	chrono::system_clock::time_point m_log_end_time;
 public:
 	bool is_pc;
 	int id;
@@ -184,6 +186,15 @@ public:
 		t_damge.setStyle(sf::Text::Bold);
 		m_damge_end_time = chrono::system_clock::now() + chrono::seconds(1);
 	}
+	
+	void set_log(const char str[])
+	{
+		m_log.setFont(g_font);
+		m_log.setString(str);
+		m_log.setFillColor(sf::Color(255, 255, 255));
+		m_log.setStyle(sf::Text::Bold);
+		m_log_end_time = chrono::system_clock::now() + chrono::seconds(2);
+	}
 };
 
 bool is_pc(int object_id)
@@ -193,6 +204,9 @@ bool is_pc(int object_id)
 
 OBJECT avatar;
 unordered_map <int, OBJECT> players;
+
+sf::Texture* chat;
+sf::Sprite m_chat_sprite;
 
 void OBJECT::draw()
 {
@@ -228,13 +242,36 @@ void OBJECT::draw()
 		t_damge.setPosition(rx + 70 - size.width / 2, ry + 5);
 		g_window->draw(t_damge);
 	}
+
+	if (m_log_end_time >= chrono::system_clock::now())
+	{
+		m_log.setPosition(200.0f, 900.0f);
+		g_window->draw(m_log);
+	}
+
+	if (chatMode)
+	{
+		sf::Text text;
+		text.setFont(g_font);
+		text.setFillColor(sf::Color(255, 255, 0));
+		char buf[100];
+		sprintf_s(buf, "ChatMode");
+		text.setPosition(200, 650);
+		text.setString(buf);
+		g_window->draw(text);
+		m_chat_sprite.setTexture(*chat);
+		m_chat_sprite.setPosition(200, 700);
+		g_window->draw(m_chat_sprite);
+	}
 }
 
 OBJECT white_tile;
 OBJECT black_tile;
 
+sf::Sprite m_ui_info;
 sf::Texture* board;
 sf::Texture* pieces;
+sf::Texture* info;
 
 void client_initialize()
 {
@@ -245,8 +282,12 @@ void client_initialize()
 
 	board = new sf::Texture;
 	pieces = new sf::Texture;
+	chat = new sf::Texture;
+	info = new sf::Texture;
 	board->loadFromFile("fieldmap.bmp");
 	pieces->loadFromFile("character.png");
+	chat->loadFromFile("chat.png");
+	info->loadFromFile("ui_info.png");
 	if (false == g_font.loadFromFile("Maplestory Bold.ttf")) {
 		cout << "Font Loading Error!\n";
 		exit(-1);
@@ -385,6 +426,7 @@ void ProcessPacket(char* ptr)
 			play_sound_effect("SE_Slash.wav");
 
 			players[npc].set_damage(my_packet->atk);
+			avatar.set_log("The hero hit the monster and inflicted 10 damage.");
 		}
 		else
 		{
@@ -411,6 +453,7 @@ void ProcessPacket(char* ptr)
 			avatar.m_level = my_packet->level;
 			avatar.m_exp = my_packet->exp;
 			avatar.m_max_exp = my_packet->max_exp;
+			avatar.set_log("Obtained the 20th experience by hunting monsters.");
 		}
 		else
 		{
@@ -469,23 +512,6 @@ void client_main()
 	if (recv_result != sf::Socket::NotReady)
 		if (received > 0) process_data(net_buf, received);
 
-	/*for (int i = 0; i < SCREEN_WIDTH; ++i)
-		for (int j = 0; j < SCREEN_HEIGHT; ++j)
-		{
-			int tile_x = i + g_left_x;
-			int tile_y = j + g_top_y;
-			if ((tile_x < 0) || (tile_y < 0)) continue;
-			if (0 == (tile_x / 3 + tile_y / 3) % 2) {
-				white_tile.a_move(TILE_WIDTH * i, TILE_WIDTH * j);
-				white_tile.a_draw();
-			}
-			else
-			{
-				black_tile.a_move(TILE_WIDTH * i, TILE_WIDTH * j);
-				black_tile.a_draw();
-			}
-		}*/
-
 	for (int i = 0; i < SCREEN_WIDTH; ++i)
 		for (int j = 0; j < SCREEN_HEIGHT; ++j)
 		{
@@ -511,23 +537,49 @@ void client_main()
 			}
 		}
 	avatar.draw();
+
+	m_ui_info.setTexture(*info);
+	g_window->draw(m_ui_info);
+
 	for (auto& pl : players) pl.second.draw();
 	sf::Text text;
 	text.setFont(g_font);
-	text.setFillColor(sf::Color(0, 0, 0));
+	text.setFillColor(sf::Color(255, 255, 255));
 	char buf[100];
 
 	sprintf_s(buf, "player exp: (%d/%d)", avatar.m_exp, avatar.m_max_exp);
+	text.setPosition(10.0f, 5.0f);
 	text.setString(buf);
 	g_window->draw(text);
 
-	sprintf_s(buf, "player Pos: (%d, %d", avatar.m_x, avatar.m_y);
+	sprintf_s(buf, "player Pos: (%d, %d)", avatar.m_x, avatar.m_y);
 	text.setString(buf);
-	text.setPosition(0.0f, 25.0f);
+	text.setPosition(10.0f, 30.0f);
 	g_window->draw(text);
 
+	sprintf_s(buf, "operation keys", avatar.m_x, avatar.m_y);
+	text.setString(buf);
+	text.setPosition(10.0f, 70.0f);
+	g_window->draw(text);
+
+	sprintf_s(buf, "move: w, a, s, d", avatar.m_x, avatar.m_y);
+	text.setString(buf);
+	text.setPosition(10.0f, 120.0f);
+	g_window->draw(text);
+
+	sprintf_s(buf, "attack: a", avatar.m_x, avatar.m_y);
+	text.setString(buf);
+	text.setPosition(10.0f, 150.0f);
+	g_window->draw(text);
+
+	sprintf_s(buf, "chat: c", avatar.m_x, avatar.m_y);
+	text.setString(buf);
+	text.setPosition(10.0f, 180.0f);
+	g_window->draw(text);
+
+	text.setFillColor(sf::Color(255, 255, 255));
 	text.setString(m_chat);
-	text.setPosition(0.0f, 50.0f);
+	text.setPosition(210.0f, 700.0f);
 	g_window->draw(text);
 
 	/*sprintf_s(buf, "player exp: (%d, %d)", avatar.m_x, avatar.m_y);
@@ -621,6 +673,10 @@ int main()
 					{
 						m_chat.clear();
 						chatMode = false;
+					}
+					else if (event.key.code == sf::Keyboard::Space)
+					{
+						m_chat += " ";
 					}
 					else
 					{
