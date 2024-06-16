@@ -9,6 +9,8 @@ constexpr int MAX_NPC = 200000;
 constexpr int W_WIDTH = 2000;
 constexpr int W_HEIGHT = 2000;
 
+int TILE_BORDER = 3;
+
 // Packet ID
 constexpr char CS_LOGIN = 0;
 constexpr char CS_MOVE = 1;

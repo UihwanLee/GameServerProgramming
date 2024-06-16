@@ -20,8 +20,6 @@ constexpr auto SCREEN_HEIGHT = 16;
 constexpr auto TOTAL_MAP_WIDTH = 2000;
 constexpr auto TOTAL_MAP_HEIGHT = 2000;
 
-constexpr auto TILE_BORDER = 3;
-
 int CENTRAL_TILE_SPACING_WIDTH = 5;
 int CENTRAL_TILE_SPACING_HEIGHT = 5;
 
@@ -40,6 +38,8 @@ float volume = 100.0f;
 
 bool chatMode = false;
 std::string m_chat;
+
+int tile_map[TOTAL_MAP_WIDTH][TOTAL_MAP_HEIGHT] = { 0, };
 
 void play_bgm(const std::string& filename)
 {
@@ -203,7 +203,7 @@ bool is_pc(int object_id)
 }
 
 OBJECT avatar;
-unordered_map <int, OBJECT> players;
+unordered_map <int, OBJECT> objects;
 
 sf::Texture* chat;
 sf::Sprite m_chat_sprite;
@@ -265,8 +265,8 @@ void OBJECT::draw()
 	}
 }
 
-OBJECT white_tile;
-OBJECT black_tile;
+OBJECT tile_grass;
+OBJECT tile_wall;
 
 sf::Sprite m_ui_info;
 sf::Texture* board;
@@ -292,19 +292,32 @@ void client_initialize()
 		cout << "Font Loading Error!\n";
 		exit(-1);
 	}
-	white_tile = OBJECT{ *board, 5, 5, TILE_WIDTH, TILE_WIDTH };
-	black_tile = OBJECT{ *board, 69, 5, TILE_WIDTH, TILE_WIDTH };
+	tile_grass = OBJECT{ *board, 5, 5, TILE_WIDTH, TILE_WIDTH };
+	tile_wall = OBJECT{ *board, 69, 5, TILE_WIDTH, TILE_WIDTH };
 	avatar = OBJECT{ *pieces, 0, 0, 64, 64 };
 
 	CENTRAL_TILE_SPACING_WIDTH = dis(gen);
 	CENTRAL_TILE_SPACING_HEIGHT = dis(gen);
 
 	avatar.move(4, 4);
+
+	// tile_map 초기화
+	for (int i = 0; i < TOTAL_MAP_WIDTH; ++i) {
+		for (int j = 0; j < TOTAL_MAP_HEIGHT; ++j) {
+			if (i < TILE_BORDER || i >= TOTAL_MAP_WIDTH - TILE_BORDER ||
+				j < TILE_BORDER || j >= TOTAL_MAP_HEIGHT - TILE_BORDER) {
+				tile_map[i][j] = 1;
+			}
+			else {
+				tile_map[i][j] = 0;
+			}
+		}
+	}
 }
 
 void client_finish()
 {
-	players.clear();
+	objects.clear();
 	delete board;
 	delete pieces;
 }
@@ -327,7 +340,6 @@ void ProcessPacket(char* ptr)
 	{
 		std::cout << "[로그인 성공] 로그인 하였습니다.\n";
 		SC_LOGIN_INFO_PACKET* packet = reinterpret_cast<SC_LOGIN_INFO_PACKET*>(ptr);
-		std::cout << "name: " << packet->name << std::endl;
 		avatar.set_name(packet->name);
 		g_myid = packet->id;
 		avatar.id = g_myid;
@@ -356,23 +368,23 @@ void ProcessPacket(char* ptr)
 			avatar.show();
 		}
 		else if (id < MAX_USER) {
-			players[id] = OBJECT{ *pieces, 0, 0, 64, 64 };
-			players[id].id = id;
-			players[id].is_pc = true;
-			players[id].move(my_packet->x, my_packet->y);
-			players[id].m_hp = my_packet->hp;
-			players[id].m_level = my_packet->level;
-			players[id].set_name(my_packet->name);
-			players[id].show();
+			objects[id] = OBJECT{ *pieces, 0, 0, 64, 64 };
+			objects[id].id = id;
+			objects[id].is_pc = true;
+			objects[id].move(my_packet->x, my_packet->y);
+			objects[id].m_hp = my_packet->hp;
+			objects[id].m_level = my_packet->level;
+			objects[id].set_name(my_packet->name);
+			objects[id].show();
 		}
 		else {
-			players[id] = OBJECT{ *pieces, 256, 0, 64, 64 };
-			players[id].id = id;
-			players[id].m_hp = 100;
-			players[id].is_pc = false;
-			players[id].move(my_packet->x, my_packet->y);
-			players[id].set_name(my_packet->name);
-			players[id].show();
+			objects[id] = OBJECT{ *pieces, 256, 0, 64, 64 };
+			objects[id].id = id;
+			objects[id].m_hp = 100;
+			objects[id].is_pc = false;
+			objects[id].move(my_packet->x, my_packet->y);
+			objects[id].set_name(my_packet->name);
+			objects[id].show();
 		}
 		break;
 	}
@@ -386,7 +398,7 @@ void ProcessPacket(char* ptr)
 			g_top_y = my_packet->y - SCREEN_HEIGHT / 2;
 		}
 		else {
-			players[other_id].move(my_packet->x, my_packet->y);
+			objects[other_id].move(my_packet->x, my_packet->y);
 		}
 		break;
 	}
@@ -399,7 +411,7 @@ void ProcessPacket(char* ptr)
 			avatar.hide();
 		}
 		else {
-			players.erase(other_id);
+			objects.erase(other_id);
 		}
 		break;
 	}
@@ -411,7 +423,7 @@ void ProcessPacket(char* ptr)
 			avatar.set_chat(my_packet->mess);
 		}
 		else {
-			players[other_id].set_chat(my_packet->mess);
+			objects[other_id].set_chat(my_packet->mess);
 		}
 
 		break;
@@ -427,12 +439,12 @@ void ProcessPacket(char* ptr)
 			volume = 50.0f;
 			play_sound_effect("SE_Slash.wav");
 
-			players[npc].set_damage(my_packet->atk);
+			objects[npc].set_damage(my_packet->atk);
 			avatar.set_log("The hero hit the monster and inflicted 10 damage.");
 		}
 		else
 		{
-			players[npc].set_damage(my_packet->atk);
+			objects[npc].set_damage(my_packet->atk);
 		}
 		break;
 	}
@@ -459,9 +471,9 @@ void ProcessPacket(char* ptr)
 		}
 		else
 		{
-			players[other_id].m_level = my_packet->level;
-			players[other_id].m_exp = my_packet->exp;
-			players[other_id].m_max_exp = my_packet->max_exp;
+			objects[other_id].m_level = my_packet->level;
+			objects[other_id].m_exp = my_packet->exp;
+			objects[other_id].m_max_exp = my_packet->max_exp;
 		}
 
 		break;
@@ -525,22 +537,21 @@ void client_main()
 			bool is_edge = tile_x < TILE_BORDER || tile_x >= TOTAL_MAP_WIDTH - TILE_BORDER ||
 				tile_y < TILE_BORDER || tile_y >= TOTAL_MAP_HEIGHT - TILE_BORDER;
 
-			// 중앙에 간격을 두고 검은 타일을 배치하는 조건
-			bool is_central_black_tile = (tile_x % CENTRAL_TILE_SPACING_WIDTH == 0) && (tile_y % CENTRAL_TILE_SPACING_HEIGHT == 0);
-
-			if (is_edge || is_central_black_tile) {
-				black_tile.a_move(TILE_WIDTH * i, TILE_WIDTH * j);
-				black_tile.a_draw();
+			if (is_edge) {
+				tile_map[i][j] = 0;
+				tile_wall.a_move(TILE_WIDTH * i, TILE_WIDTH * j);
+				tile_wall.a_draw();
 			}
 			else
 			{
-				white_tile.a_move(TILE_WIDTH * i, TILE_WIDTH * j);
-				white_tile.a_draw();
+				tile_map[i][j] = 1;
+				tile_grass.a_move(TILE_WIDTH * i, TILE_WIDTH * j);
+				tile_grass.a_draw();
 			}
 		}
 	avatar.draw();
 
-	for (auto& pl : players) pl.second.draw();
+	for (auto& pl : objects) pl.second.draw();
 
 	m_ui_info.setTexture(*info);
 	g_window->draw(m_ui_info);
@@ -597,6 +608,19 @@ void send_packet(void* packet)
 	unsigned char* p = reinterpret_cast<unsigned char*>(packet);
 	size_t sent = 0;
 	s_socket.send(packet, p[0], sent);
+}
+
+bool check_collision(int offset_x, int offset_y)
+{
+	int r_x = avatar.m_x + offset_x;
+	int r_y = avatar.m_y + offset_y;
+
+	if (r_x < 0 || r_x >= TOTAL_MAP_WIDTH) return false;
+	if (r_y < 0 || r_y >= TOTAL_MAP_HEIGHT) return false;
+
+	if (tile_map[r_x][r_y] == 1) return false;
+
+	return true;
 }
 
 int main()
@@ -702,19 +726,32 @@ int main()
 				else
 				{
 					int direction = -1;
+					bool can_move = false;
 					switch (event.key.code) {
 					case sf::Keyboard::Left:
+					{
 						direction = 2;
+						can_move = check_collision(-1, 0);
 						break;
+					}
 					case sf::Keyboard::Right:
+					{
 						direction = 3;
+						can_move = check_collision(1, 0);
 						break;
+					}
 					case sf::Keyboard::Up:
+					{
 						direction = 0;
+						can_move = check_collision(0, -1);
 						break;
+					}
 					case sf::Keyboard::Down:
+					{
 						direction = 1;
+						can_move = check_collision(0, 1);
 						break;
+					}
 					case sf::Keyboard::A:
 						direction = -1;
 						CS_ATTACK_PACKET p;
@@ -729,7 +766,7 @@ int main()
 						window.close();
 						break;
 					}
-					if (-1 != direction) {
+					if (-1 != direction && can_move) {
 						CS_MOVE_PACKET p;
 						p.size = sizeof(p);
 						p.type = CS_MOVE;
