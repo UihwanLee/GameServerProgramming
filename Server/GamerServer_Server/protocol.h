@@ -84,6 +84,8 @@ struct SC_ADD_OBJECT_PACKET {
 	char	type;
 	int		id;
 	short	x, y;
+	int		hp;
+	int		level;
 	char	name[NAME_SIZE];
 };
 

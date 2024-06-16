@@ -360,6 +360,8 @@ void ProcessPacket(char* ptr)
 			players[id].id = id;
 			players[id].is_pc = true;
 			players[id].move(my_packet->x, my_packet->y);
+			players[id].m_hp = my_packet->hp;
+			players[id].m_level = my_packet->level;
 			players[id].set_name(my_packet->name);
 			players[id].show();
 		}
@@ -538,10 +540,11 @@ void client_main()
 		}
 	avatar.draw();
 
+	for (auto& pl : players) pl.second.draw();
+
 	m_ui_info.setTexture(*info);
 	g_window->draw(m_ui_info);
 
-	for (auto& pl : players) pl.second.draw();
 	sf::Text text;
 	text.setFont(g_font);
 	text.setFillColor(sf::Color(255, 255, 255));

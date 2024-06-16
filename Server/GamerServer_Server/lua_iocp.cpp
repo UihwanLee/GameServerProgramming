@@ -224,6 +224,8 @@ void SESSION::send_add_player_packet(int c_id)
 	add_packet.type = SC_ADD_OBJECT;
 	add_packet.x = objects[c_id].x;
 	add_packet.y = objects[c_id].y;
+	add_packet.hp = objects[c_id].hp;
+	add_packet.level = objects[c_id].level;
 	_vl.lock();
 	_view_list.insert(c_id);
 	_vl.unlock();
