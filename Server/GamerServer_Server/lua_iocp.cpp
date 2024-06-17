@@ -85,6 +85,7 @@ public:
 	int		last_move_time;
 	lua_State* _L;
 	mutex	_ll;
+	bool party;
 public:
 	SESSION()
 	{
@@ -96,6 +97,7 @@ public:
 		atk = 10;
 		_state = ST_FREE;
 		_prev_remain = 0;
+		party = false;
 	}
 
 	~SESSION() {}
@@ -158,6 +160,8 @@ public:
 	}
 	void send_attack_packet(int c_id, int npc);
 	void send_monster_dead(int c_id, int npc);
+	void send_request_party(int p_id);
+	void send_accept_party(int p_id);
 };
 
 HANDLE h_iocp;
@@ -243,6 +247,24 @@ void SESSION::send_monster_dead(int p_id, int npc)
 	packet.level = level;
 	packet.exp = exp;
 	packet.max_exp = max_exp;
+	do_send(&packet);
+}
+
+void SESSION::send_request_party(int p_id)
+{
+	SC_PARTY_REQUEST_PACKET packet;
+	packet.size = sizeof(packet);
+	packet.type = SC_PARTY_REQUEST;
+	packet.id = p_id;
+	do_send(&packet);
+}
+
+void SESSION::send_accept_party(int p_id)
+{
+	SC_PARTY_ACCEPT_PACKET packet;
+	packet.size = sizeof(packet);
+	packet.type = SC_PARTY_ACCEPT;
+	packet.id = p_id;
 	do_send(&packet);
 }
 
@@ -488,6 +510,14 @@ void process_packet(int c_id, char* packet)
 								if (ST_INGAME != pl._state) continue;
 							}
 							if (pl._id == c_id) continue;
+
+							// 파티원이면 경험치 나눔
+							if (pl.party && objects[c_id].party)
+							{
+								update_level(pl._id);
+								pl.send_monster_dead(pl._id, cl._id);
+							}
+
 							if (false == can_see(c_id, pl._id))
 								continue;
 							if (is_pc(pl._id))
@@ -522,6 +552,33 @@ void process_packet(int c_id, char* packet)
 		}
 	}
 				  break;
+	case CS_PARTY_REQUEST: {
+		CS_PARTY_REQUEST_PACKET* p = reinterpret_cast<CS_PARTY_REQUEST_PACKET*>(packet);
+
+		// 플레이어 주변 파티가 있는지 확인
+		for (auto& cl : objects) {
+			if (cl._state != ST_INGAME) continue;
+			if (is_npc(cl._id)) continue;
+			if (cl._id == c_id) continue;
+			if (can_see(c_id, cl._id) == false) continue;
+
+			// 주변 플레이어에게 파티 요청
+			objects[cl._id].send_request_party(c_id);
+		}
+	}
+				break;
+	case CS_PARTY_ACCEPT: {
+		CS_PARTY_ACCEPT_PACKET* p = reinterpret_cast<CS_PARTY_ACCEPT_PACKET*>(packet);
+
+		// 파티 세팅
+		objects[c_id].party = true;
+		objects[p->leader].party = true;
+
+		// 파티 수락하면 파티 수락했다고 알려줌
+		objects[c_id].send_accept_party(p->leader);
+		objects[p->leader].send_accept_party(c_id);
+	}
+
 	}
 }
 

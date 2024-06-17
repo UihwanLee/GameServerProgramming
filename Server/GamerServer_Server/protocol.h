@@ -18,6 +18,8 @@ constexpr char CS_CHAT = 2;
 constexpr char CS_ATTACK = 3;			// 4 방향 공격
 constexpr char CS_TELEPORT = 4;			// RANDOM한 위치로 Teleport, Stress Test할 때 Hot Spot현상을 피하기 위해 구현
 constexpr char CS_LOGOUT = 5;			// 클라이언트에서 정상적으로 접속을 종료하는 패킷
+constexpr char CS_PARTY_REQUEST = 6;
+constexpr char CS_PARTY_ACCEPT = 7;
 
 constexpr char SC_LOGIN_INFO = 2;
 constexpr char SC_ADD_OBJECT = 3;
@@ -29,6 +31,8 @@ constexpr char SC_LOGIN_FAIL = 8;
 constexpr char SC_STAT_CHANGE = 9;
 constexpr char SC_ATTACK = 10;
 constexpr char SC_MONSTER_DEAD = 11;
+constexpr char SC_PARTY_REQUEST = 12;
+constexpr char SC_PARTY_ACCEPT = 13;
 
 #pragma pack (push, 1)
 struct CS_LOGIN_PACKET {
@@ -65,6 +69,19 @@ struct CS_ATTACK_PACKET {
 	unsigned char size;
 	char	type;
 	int		atk;
+};
+
+struct CS_PARTY_REQUEST_PACKET {
+	unsigned char size;
+	char	type;
+	int		id;
+};
+
+struct CS_PARTY_ACCEPT_PACKET {
+	unsigned char size;
+	char	type;
+	int		id;
+	int		leader;
 };
 
 struct SC_LOGIN_INFO_PACKET {
@@ -149,6 +166,19 @@ struct SC_DEAD_MONSTER_PACKET {
 	int		level;
 	int		exp;
 	int		max_exp;
+};
+
+struct SC_PARTY_REQUEST_PACKET {
+	unsigned char size;
+	char	type;
+	int		id;
+};
+
+struct SC_PARTY_ACCEPT_PACKET {
+	unsigned char size;
+	char	type;
+	int		id;
+	int     leader;
 };
 
 #pragma pack (pop)

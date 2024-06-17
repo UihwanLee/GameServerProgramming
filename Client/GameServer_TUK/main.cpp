@@ -37,6 +37,10 @@ sf::Font g_font;
 float volume = 100.0f;
 
 bool chatMode = false;
+bool is_request_party = false;
+bool is_accept_party = false;
+int  g_leader = -1;
+int  g_party = -1;
 std::string m_chat;
 
 int tile_map[TOTAL_MAP_WIDTH][TOTAL_MAP_HEIGHT] = { 0, };
@@ -98,6 +102,8 @@ private:
 	sf::Text t_level;
 	sf::Text t_damge;
 	sf::Text m_log;
+	sf::Text m_party_request;
+	sf::Text m_party_accept;
 	chrono::system_clock::time_point m_mess_end_time;
 	chrono::system_clock::time_point m_damge_end_time;
 	chrono::system_clock::time_point m_log_end_time;
@@ -110,12 +116,14 @@ public:
 	int m_level;
 	int m_exp;
 	int m_max_exp;
+	int m_leader;
 	OBJECT(sf::Texture& t, int x, int y, int x2, int y2) {
 		m_showing = false;
 		m_sprite.setTexture(t);
 		m_sprite.setTextureRect(sf::IntRect(x, y, x2, y2));
 		set_name("NONAME");
 		m_mess_end_time = chrono::system_clock::now();
+		m_leader = -1;
 	}
 	OBJECT() {
 		m_showing = false;
@@ -195,6 +203,9 @@ public:
 		m_log.setStyle(sf::Text::Bold);
 		m_log_end_time = chrono::system_clock::now() + chrono::seconds(2);
 	}
+
+	void set_request_party(int p_id);
+	void set_accept_party();
 };
 
 bool is_pc(int object_id)
@@ -263,6 +274,41 @@ void OBJECT::draw()
 		m_chat_sprite.setPosition(200, 700);
 		g_window->draw(m_chat_sprite);
 	}
+
+	if (is_request_party)
+	{
+		m_party_request.setFont(g_font);
+		char buf[100];
+		sprintf_s(buf, "Someone request to a party.Mediha in charge? Y / N");
+		m_party_request.setString(buf);
+		m_party_request.setFillColor(sf::Color(255, 255, 255));
+		m_party_request.setStyle(sf::Text::Bold);
+		m_party_request.setPosition(50.0f, 600.0f);
+		g_window->draw(m_party_request);
+	}
+
+	if (is_accept_party)
+	{
+		m_party_accept.setFont(g_font);
+		char buf[100];
+		sprintf_s(buf, "Party");
+		m_party_accept.setString(buf);
+		m_party_accept.setFillColor(sf::Color(255, 255, 255));
+		m_party_accept.setStyle(sf::Text::Bold);
+		m_party_accept.setPosition(300.0f, 600.0f);
+		g_window->draw(m_party_accept);
+	}
+}
+
+void OBJECT::set_request_party(int p_id)
+{
+	is_request_party = true;
+}
+
+void OBJECT::set_accept_party()
+{
+	is_request_party = false;
+	is_accept_party = true;
 }
 
 OBJECT tile_grass;
@@ -478,6 +524,30 @@ void ProcessPacket(char* ptr)
 
 		break;
 	}
+	case SC_PARTY_REQUEST:
+	{
+		SC_PARTY_REQUEST_PACKET* my_packet = reinterpret_cast<SC_PARTY_REQUEST_PACKET*>(ptr);
+
+		int leader = my_packet->id;
+		
+		is_request_party = true;
+		objects[g_myid].m_leader = leader;
+
+		g_leader = leader;
+
+		objects[g_myid].set_request_party(leader);
+
+		break;
+	}
+	case SC_PARTY_ACCEPT:
+	{
+		SC_PARTY_ACCEPT_PACKET* my_packet = reinterpret_cast<SC_PARTY_ACCEPT_PACKET*>(ptr);
+
+		g_leader = my_packet->id;
+		g_party = g_myid;
+		objects[g_myid].set_accept_party();
+		break;
+	}
 	default:
 		printf("Unknown PACKET type [%d]\n", ptr[1]);
 	}
@@ -571,24 +641,29 @@ void client_main()
 	text.setPosition(10.0f, 30.0f);
 	g_window->draw(text);
 
-	sprintf_s(buf, "operation keys", avatar.m_x, avatar.m_y);
+	sprintf_s(buf, "operation keys");
 	text.setString(buf);
 	text.setPosition(10.0f, 70.0f);
 	g_window->draw(text);
 
-	sprintf_s(buf, "move: w, a, s, d", avatar.m_x, avatar.m_y);
+	sprintf_s(buf, "move: w, a, s, d");
 	text.setString(buf);
 	text.setPosition(10.0f, 120.0f);
 	g_window->draw(text);
 
-	sprintf_s(buf, "attack: a", avatar.m_x, avatar.m_y);
+	sprintf_s(buf, "attack: a");
 	text.setString(buf);
 	text.setPosition(10.0f, 150.0f);
 	g_window->draw(text);
 
-	sprintf_s(buf, "chat: c", avatar.m_x, avatar.m_y);
+	sprintf_s(buf, "chat: c");
 	text.setString(buf);
 	text.setPosition(10.0f, 180.0f);
+	g_window->draw(text);
+
+	sprintf_s(buf, "party: p");
+	text.setString(buf);
+	text.setPosition(10.0f, 210.0f);
 	g_window->draw(text);
 
 	text.setFillColor(sf::Color(255, 255, 255));
@@ -627,8 +702,8 @@ int main()
 {
 	wcout.imbue(locale("korean"));
 	char SERVER_ADDR[10] = "127.0.0.1";
-	/*std::cout << "辑滚 林家: ";
-	std::cin.getline(SERVER_ADDR, 10);*/
+	std::cout << "辑滚 林家: ";
+	std::cin.getline(SERVER_ADDR, 10);
 
 	sf::Socket::Status status = s_socket.connect(SERVER_ADDR, PORT_NUM);
 	s_socket.setBlocking(false);
@@ -758,6 +833,29 @@ int main()
 						p.size = sizeof(p);
 						p.type = CS_ATTACK;
 						send_packet(&p);
+						break;
+					case sf::Keyboard::P:
+					{
+						CS_PARTY_REQUEST_PACKET p;
+						p.size = sizeof(p);
+						p.type = CS_PARTY_REQUEST;
+						send_packet(&p);
+					}
+						break;
+					case sf::Keyboard::Y:
+					{
+						if (is_request_party && g_leader != -1)
+						{
+							CS_PARTY_ACCEPT_PACKET p;
+							p.size = sizeof(p);
+							p.type = CS_PARTY_ACCEPT;
+							p.leader = g_leader;
+							send_packet(&p);
+						}
+					}
+						break;
+					case sf::Keyboard::N:
+						is_request_party = false;
 						break;
 					case sf::Keyboard::C:
 						chatMode = true;
